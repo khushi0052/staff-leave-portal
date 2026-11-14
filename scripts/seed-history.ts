@@ -1,7 +1,12 @@
 
 import { demoUsers } from './demo-users';
+import { validateHistoricalPeriod } from './validate-history';
 
-// The assessment requires approximately 5,000 requests.
+// =====================================================
+// 1. TYPES AND CONFIGURATION
+// =====================================================
+
+// Number of historical requests required by the assessment.
 const TOTAL_REQUESTS = 5000;
 
 type LeaveStatus =
@@ -18,8 +23,11 @@ type HistoricalRequest = {
   status: LeaveStatus;
 };
 
-// A deterministic random number generator.
-// The same seed produces the same sequence.
+// =====================================================
+// 2. DETERMINISTIC RANDOM NUMBER GENERATOR
+// =====================================================
+
+// The same seed produces the same random sequence.
 function createRandom(seed: number) {
   return () => {
     seed = (seed * 1664525 + 1013904223) >>> 0;
@@ -28,6 +36,10 @@ function createRandom(seed: number) {
 }
 
 const random = createRandom(42);
+
+// =====================================================
+// 3. REQUEST STATUS DISTRIBUTION
+// =====================================================
 
 const statuses: LeaveStatus[] = [
   ...Array<LeaveStatus>(3250).fill('approved'),
@@ -42,7 +54,7 @@ const leaveTypes: LeaveType[] = [
   'unpaid',
 ];
 
-// Shuffle statuses so they aren't grouped together.
+// Shuffle statuses using the deterministic random generator.
 for (let i = statuses.length - 1; i > 0; i--) {
   const j = Math.floor(random() * (i + 1));
 
@@ -52,7 +64,10 @@ for (let i = statuses.length - 1; i > 0; i--) {
   ];
 }
 
-// Generate the initial request records.
+// =====================================================
+// 4. GENERATE INITIAL REQUEST PREVIEWS
+// =====================================================
+
 function generateRequests(): HistoricalRequest[] {
   const requests: HistoricalRequest[] = [];
 
@@ -92,12 +107,13 @@ for (const status of [
 
 console.log('Historical data preview generated.');
 
+// =====================================================
+// 5. DEMONSTRATION PUBLIC HOLIDAYS
+// =====================================================
 
-import { countWorkingDays } from './working-days';
-
-// Temporary holiday dates matching our demo holiday seed.
-// Later we will load these directly from Supabase.
-const holidays = new Set([
+// These dates match our current demonstration holiday seed.
+// Later, we'll load holidays directly from PostgreSQL.
+const holidays = new Set<string>([
   '2025-01-01',
   '2025-05-01',
   '2025-12-25',
@@ -106,10 +122,17 @@ const holidays = new Set([
   '2026-12-25',
 ]);
 
-// Generate a date in 2025 or 2026.
+// =====================================================
+// 6. GENERATE A RANDOM START DATE
+// =====================================================
+
 function randomLeaveDate(): string {
   const year = random() < 0.5 ? 2025 : 2026;
+
+  // JavaScript months start at 0.
   const month = Math.floor(random() * 12);
+
+  // Choose day 1 to 28 to avoid invalid month dates.
   const day = Math.floor(random() * 28) + 1;
 
   const date = new Date(Date.UTC(year, month, day));
@@ -117,34 +140,51 @@ function randomLeaveDate(): string {
   return date.toISOString().slice(0, 10);
 }
 
-// Generate a short leave period.
+// =====================================================
+// 7. GENERATE A VALID LEAVE PERIOD
+// =====================================================
+
 function generateLeavePeriod() {
-  const start = randomLeaveDate();
+  // Try a maximum of 1000 times.
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const start = randomLeaveDate();
 
-  const startDate = new Date(`${start}T00:00:00Z`);
+    const startDate = new Date(`${start}T00:00:00Z`);
 
-  // Leave lasts between 1 and 5 calendar days.
-  const duration = Math.floor(random() * 5) + 1;
+    // Leave lasts between 1 and 5 calendar days.
+    const duration = Math.floor(random() * 5) + 1;
 
-  const endDate = new Date(startDate);
-  endDate.setUTCDate(endDate.getUTCDate() + duration - 1);
+    const endDate = new Date(startDate);
 
-  const end = endDate.toISOString().slice(0, 10);
+    endDate.setUTCDate(
+      endDate.getUTCDate() + duration - 1
+    );
 
-  const workingDays = countWorkingDays(
-    start,
-    end,
-    holidays
+    const end = endDate.toISOString().slice(0, 10);
+
+    // Validate the dates and calculate working days.
+    const validPeriod = validateHistoricalPeriod(
+      start,
+      end,
+      holidays
+    );
+
+    // Return only valid leave periods.
+    if (validPeriod !== null) {
+      return validPeriod;
+    }
+  }
+
+  // Fail clearly instead of returning invalid data.
+  throw new Error(
+    'Could not generate a valid leave period after 1000 attempts'
   );
-
-  return {
-    start,
-    end,
-    workingDays,
-  };
 }
 
-// Print five example leave periods.
+// =====================================================
+// 8. DISPLAY FIVE SAMPLE LEAVE PERIODS
+// =====================================================
+
 console.log('\nSample leave periods:');
 
 for (let i = 0; i < 5; i++) {
