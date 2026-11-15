@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
+import EmployeeDashboard from './components/EmployeeDashboard';
 import './App.css';
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Restore the session and listen for authentication changes.
   useEffect(() => {
     let mounted = true;
 
@@ -39,7 +41,12 @@ function App() {
         setSession(data.session);
         setCheckingSession(false);
       }
-    );
+    ).catch(() => {
+      if (mounted) {
+        setError('Unable to restore your session.');
+        setCheckingSession(false);
+      }
+    });
 
     return () => {
       mounted = false;
@@ -47,6 +54,7 @@ function App() {
     };
   }, []);
 
+  // Sign in with Supabase Authentication.
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -69,6 +77,7 @@ function App() {
     }
   }
 
+  // Sign out with Supabase Authentication.
   async function handleLogout() {
     setError('');
     setLoading(true);
@@ -89,16 +98,18 @@ function App() {
     }
   }
 
+  // Show a loading message while restoring the session.
   if (checkingSession) {
     return (
       <main className="page">
-        <div className="card">
+        <section className="card">
           <p>Checking your session...</p>
-        </div>
+        </section>
       </main>
     );
   }
 
+  // Show the dashboard after successful login.
   if (session) {
     return (
       <main className="page">
@@ -107,24 +118,16 @@ function App() {
 
           <h1>Staff Leave Portal</h1>
 
-          <p className="subtitle">
-            You're signed in successfully.
-          </p>
-
-          <div className="welcome-box">
-            <h2>Welcome!</h2>
-            <p>{session.user.email}</p>
-          </div>
+          <EmployeeDashboard
+            userId={session.user.id}
+            email={session.user.email ?? ''}
+          />
 
           {error && (
             <p className="error" role="alert">
               {error}
             </p>
           )}
-
-          <p className="subtitle">
-            Your leave dashboard is coming next.
-          </p>
 
           <button
             type="button"
@@ -138,6 +141,7 @@ function App() {
     );
   }
 
+  // Show the login page when no user is signed in.
   return (
     <main className="page">
       <section className="card">
@@ -150,7 +154,9 @@ function App() {
         </p>
 
         <form onSubmit={handleLogin}>
-          <label htmlFor="email">Email address</label>
+          <label htmlFor="email">
+            Email address
+          </label>
 
           <input
             id="email"
@@ -162,7 +168,9 @@ function App() {
             required
           />
 
-          <label htmlFor="password">Password</label>
+          <label htmlFor="password">
+            Password
+          </label>
 
           <input
             id="password"
@@ -180,7 +188,10 @@ function App() {
             </p>
           )}
 
-          <button type="submit" disabled={loading}>
+          <button
+            type="submit"
+            disabled={loading}
+          >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>

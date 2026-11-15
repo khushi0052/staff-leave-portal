@@ -135,3 +135,65 @@
     font-size: 24px;
   }
 }
+
+/* Leave Request Form */
+
+.leave-form-section {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.leave-form-section h3 {
+  color: #172554;
+  margin-bottom: 20px;
+}
+
+.leave-form-section form {
+  display: flex;
+  flex-direction: column;
+}
+
+.leave-form-section select,
+.leave-form-section textarea {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 20px;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font: inherit;
+}
+
+.leave-form-section textarea {
+  resize: vertical;
+}
+
+.leave-form-section button:disabled {
+  background: #9ca3af;
+  color: #ffffff;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.leave-form-section button:not(:disabled) {
+  background: #4f46e5;
+  cursor: pointer;
+}
+
+.field-hint {
+  font-size: 13px;
+  color: #64748b;
+  margin: -10px 0 20px;
+}
+
+.success {
+  background: #ecfdf5;
+  color: #047857;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
