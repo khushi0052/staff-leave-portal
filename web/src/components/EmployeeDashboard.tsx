@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import LeaveRequestForm from './LeaveRequestForm';
+import MyLeaveRequests from './MyLeaveRequests';
 
 type EmployeeProfile = {
   id: string;
@@ -207,7 +208,12 @@ export default function EmployeeDashboard({
         </p>
       </div>
 
-      <LeaveRequestForm onSuccess={refreshDashboard} />
+<LeaveRequestForm onSuccess={refreshDashboard} />
+
+<MyLeaveRequests
+  userId={userId}
+  refreshKey={refreshKey}
+/>
     </section>
   );
 }
