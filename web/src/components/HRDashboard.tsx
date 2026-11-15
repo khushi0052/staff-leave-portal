@@ -660,18 +660,6 @@ export default function HRDashboard({
           <p className="success" role="status">{message}</p>
         )}
 
-        {view === 'hr' && showAddEmployee && (
-          <AddEmployeeForm
-            departments={departments}
-            onClose={() => setShowAddEmployee(false)}
-            onCreated={async () => {
-              setShowAddEmployee(false);
-              setMessage('Employee account created successfully.');
-              await loadData();
-            }}
-          />
-        )}
-
         {/* ======================================
             PAGE 1 — HR HEAD DASHBOARD
             ====================================== */}
@@ -996,10 +984,28 @@ export default function HRDashboard({
                     <button
                       type="button"
                       className="hr-button primary"
-                      onClick={() => setShowAddEmployee(true)}
+                      aria-expanded={showAddEmployee}
+                      aria-controls="hr-add-employee-form"
+                      onClick={() => setShowAddEmployee((open) => !open)}
                     >
-                      + Add Employee
+                      {showAddEmployee ? '− Close Add Employee' : '+ Add Employee'}
                     </button>
+                    {showAddEmployee && (
+                      <div
+                        id="hr-add-employee-form"
+                        style={{ width: '100%', minWidth: 0 }}
+                      >
+                        <AddEmployeeForm
+                          departments={departments}
+                          onClose={() => setShowAddEmployee(false)}
+                          onCreated={async () => {
+                            setShowAddEmployee(false);
+                            setMessage('Employee account created successfully.');
+                            await loadData();
+                          }}
+                        />
+                      </div>
+                    )}
                     <button
                       type="button"
                       className="hr-button primary"
