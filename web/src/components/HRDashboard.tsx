@@ -265,6 +265,10 @@ export default function HRDashboard({
 
   useEffect(() => {
     void loadData();
+    // Refresh when HR returns from another tab or window after decisions.
+    const refreshOnFocus = () => { void loadData(); };
+    window.addEventListener('focus', refreshOnFocus);
+    return () => window.removeEventListener('focus', refreshOnFocus);
   }, [loadData]);
 
   const peopleById = useMemo(
@@ -303,26 +307,57 @@ export default function HRDashboard({
     );
   }
 
-  function annualApproved(userId: string): number {
-    return requests
-      .filter(
-        (r) =>
-          r.user_id === userId &&
-          r.leave_type === 'annual' &&
-          r.status === 'approved' &&
-          r.start_date >= `${year}-01-01` &&
-          r.end_date <= `${year}-12-31`
+  function remainingBalanceForYear(person: Profile, balanceYear: number): number | null {
+    if (person.annual_entitlement === null) return null;
+    const used = requests
+      .filter((r) =>
+        r.user_id === person.id &&
+        r.leave_type === 'annual' &&
+        r.status === 'approved' &&
+        r.start_date.startsWith(`${balanceYear}-`)
       )
       .reduce((sum, r) => sum + r.working_days, 0);
+    return person.annual_entitlement - used;
+  }
+
+  function availableBalanceForYear(person: Profile, balanceYear: number): number | null {
+    const remaining = remainingBalanceForYear(person, balanceYear);
+    if (remaining === null) return null;
+    const pending = requests
+      .filter((r) => r.user_id === person.id && r.leave_type === 'annual' &&
+        r.status === 'pending' && r.start_date.startsWith(`${balanceYear}-`))
+      .reduce((sum, r) => sum + r.working_days, 0);
+    return remaining - pending;
   }
 
   function remainingBalance(person: Profile): number | null {
-    if (person.annual_entitlement === null) return null;
+    return remainingBalanceForYear(person, year);
+  }
 
-    return (
-      person.annual_entitlement -
-      annualApproved(person.id)
-    );
+  function leaveTypeLabel(type: LeaveType): string {
+    return type === 'annual' ? 'Annual Leave' :
+      type === 'sick' ? 'Sick Leave' : 'Unpaid Leave';
+  }
+
+  // Unique colleagues whose APPROVED periods overlap this application.
+  function overlappingApprovedStaff(request: Request): string[] {
+    const others = new Set<string>();
+    for (const other of requests) {
+      if (
+        other.id !== request.id &&
+        other.user_id !== request.user_id &&
+        other.department_id === request.department_id &&
+        other.status === 'approved' &&
+        other.start_date <= request.end_date &&
+        other.end_date >= request.start_date
+      ) {
+        const person = peopleById.get(other.user_id);
+        if (person?.role === 'staff' || person?.role === 'manager') {
+          others.add(person.full_name);
+        }
+      }
+    }
+    return [...others].sort();
   }
 
   function averageBalance(people: Profile[]): string {
@@ -341,6 +376,35 @@ export default function HRDashboard({
 
   const managers = profiles.filter((p) => p.role === 'manager');
   const employees = profiles.filter((p) => p.role !== 'hr');
+  const staff = profiles.filter((p) => p.role === 'staff');
+
+  // Requests cannot span calendar years under the leave policy.
+  // Use the start year so each request is counted exactly once.
+  const yearRequests = requests.filter((r) =>
+    r.start_date.startsWith(`${year}-`)
+  );
+  const yearCompanyRequests = yearRequests.filter((r) => {
+    const role = peopleById.get(r.user_id)?.role;
+    return role === 'staff' || role === 'manager';
+  });
+
+  // Allocate rounding remainders so the four percentages total 100.
+  const statusCounts = LEAVE_STATUSES.map((status) =>
+    yearCompanyRequests.filter((r) => r.status === status).length
+  );
+  const statusTotal = yearCompanyRequests.length;
+  const statusPercentages = statusCounts.map((count) =>
+    statusTotal ? Math.floor((count * 100) / statusTotal) : 0
+  );
+  if (statusTotal) {
+    const remaining = 100 - statusPercentages.reduce((sum, pct) => sum + pct, 0);
+    const byRemainder = statusCounts
+      .map((count, index) => ({ index, remainder: (count * 100) % statusTotal }))
+      .sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+    for (let i = 0; i < remaining; i += 1) {
+      statusPercentages[byRemainder[i].index] += 1;
+    }
+  }
 
   const pendingStaff = requests.filter(
     (r) =>
@@ -388,7 +452,8 @@ export default function HRDashboard({
     currentRequestsPage * requestPageSize
   );
 
-  const approvedToday = employees.filter((person) =>
+  // Only staff on currently approved leave are counted in this card.
+  const approvedToday = staff.filter((person) =>
     onLeaveToday(person.id)
   ).length;
 
@@ -451,6 +516,27 @@ export default function HRDashboard({
     }
   }
 
+  // Year picker also refreshes the selected employee's balance.
+  useEffect(() => {
+    if (!selectedUserId) return;
+    let active = true;
+    setBalanceLoading(true);
+    void supabase.rpc('leave_balance', {
+      p_user: selectedUserId,
+      p_year: year,
+    }).then(({ data, error: balanceError }) => {
+      if (!active) return;
+      if (balanceError) {
+        setError(balanceError.message);
+        setBalance(null);
+      } else {
+        setBalance((data as Balance[] | null)?.[0] ?? null);
+      }
+      setBalanceLoading(false);
+    });
+    return () => { active = false; };
+  }, [year, selectedUserId]);
+
   async function saveEntitlement() {
     if (!selectedEmployee) return;
 
@@ -512,6 +598,13 @@ export default function HRDashboard({
     requestId: string,
     decision: 'approved' | 'rejected'
   ) {
+    // Never offer HR review actions for Staff requests.
+    const target = requests.find((r) => r.id === requestId);
+    if (!target || target.status !== 'pending' ||
+        peopleById.get(target.user_id)?.role !== 'manager') {
+      setError('Only pending Department Head requests can be reviewed by HR.');
+      return;
+    }
     let comment = comments[requestId]?.trim() ?? '';
 
     if (decision === 'rejected' && !comment) {
@@ -824,14 +917,14 @@ export default function HRDashboard({
               />
               <Stat
                 icon="✓"
-                label="Approved / On Leave Today"
+                label="On Leave Today"
                 value={approvedToday}
                 color="green"
               />
               <Stat
                 icon="▣"
                 label="Avg. Annual Leave Balance"
-                value={averageBalance(employees)}
+                value={averageBalance(staff)}
                 color="lavender"
               />
             </div>
@@ -856,7 +949,7 @@ export default function HRDashboard({
                       </thead>
                       <tbody>
                         {departments.map((dept) => {
-                          const people = employees.filter(
+                          const people = staff.filter(
                             (p) => p.department_id === dept.id
                           );
 
@@ -897,7 +990,9 @@ export default function HRDashboard({
                                   className="hr-button outline"
                                   onClick={() => {
                                     setDepartmentFilter(dept.id);
+                                    setEmployeeSearch('');
                                     setSelectedUserId('');
+                                    setBalance(null);
                                     onNavigate('hr-employees');
                                   }}
                                 >
@@ -910,6 +1005,76 @@ export default function HRDashboard({
                       </tbody>
                     </table>
                   </div>
+                </Panel>
+              </div>
+
+              <div className="hr-span-6">
+                <Panel
+                  title="Department Head Leave Requests"
+                  subtitle="Pending Manager applications awaiting HR approval."
+                >
+                  {pendingManagers.length === 0 ? (
+                    <p style={{ margin: '4px 0' }}>No pending Department Head requests.</p>
+                  ) : (
+                    <div className="hr-table-scroll">
+                      <table className="hr-table">
+                        <thead>
+                          <tr>
+                            <th>Applicant</th>
+                            <th>Department</th>
+                            <th>Leave</th>
+                            <th>Dates</th>
+                            <th>Days</th>
+                            <th>Available balance</th>
+                            <th>Others on approved leave</th>
+                            <th>Decision</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pendingManagers.map((r) => {
+                            const conflicts = overlappingApprovedStaff(r);
+                            const manager = peopleById.get(r.user_id);
+                            const balanceValue = manager
+                              ? availableBalanceForYear(manager, Number(r.start_date.slice(0, 4)))
+                              : null;
+                            return (
+                              <tr key={r.id}>
+                                <td data-label="Applicant">{personName(r.user_id)}</td>
+                                <td data-label="Department">{departmentName(r.department_id)}</td>
+                                <td data-label="Leave">{leaveTypeLabel(r.leave_type)}</td>
+                                <td data-label="Dates">
+                                  {formatDate(r.start_date)} – {formatDate(r.end_date)}
+                                </td>
+                                <td data-label="Days">{r.working_days}</td>
+                                <td data-label="Available balance">
+                                  {r.leave_type === 'annual'
+                                    ? (balanceValue === null ? 'Not assigned' : `${balanceValue} days`)
+                                    : 'Not applicable'}
+                                </td>
+                                <td data-label="Others on approved leave">
+                                  {conflicts.length === 0
+                                    ? 'None'
+                                    : `${conflicts.length}: ${conflicts.slice(0, 3).join(', ')}${conflicts.length > 3 ? '…' : ''}`}
+                                </td>
+                                <td data-label="Decision">
+                                  <div className="hr-actions">
+                                    <button type="button" className="hr-button approve" disabled={busy}
+                                      onClick={() => void reviewRequest(r.id, 'approved')}>
+                                      ✓ Approve
+                                    </button>
+                                    <button type="button" className="hr-button reject" disabled={busy}
+                                      onClick={() => void reviewRequest(r.id, 'rejected')}>
+                                      × Reject
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </Panel>
               </div>
 
@@ -936,7 +1101,7 @@ export default function HRDashboard({
               <div className="hr-span-4">
                 <Panel
                   title="Company Leave Status"
-                  subtitle="All leave requests visible to HR."
+                  subtitle={`Staff and Manager requests for ${year}.`}
                 >
                   <table className="hr-table">
                     <thead>
@@ -948,109 +1113,25 @@ export default function HRDashboard({
                     </thead>
                      
 <tbody>
-  {LEAVE_STATUSES.map((status) => {
-    const count = requests.filter(
-      (request) => request.status === status
-    ).length;
-
-    const percent =
-      requests.length > 0
-        ? Math.round((count / requests.length) * 100)
-        : 0;
-
-    return (
-      <tr key={status}>
-        <td data-label="Status">
-          <span className={`hr-status ${status}`}>
-            {status}
-          </span>
-        </td>
-
-        <td data-label="Requests">
-          {count}
-        </td>
-
-        <td data-label="% of Total">
-          {percent}%
-        </td>
-      </tr>
-    );
-  })}
-</tbody>
+                      {LEAVE_STATUSES.map((status, index) => (
+                        <tr key={status}>
+                          <td data-label="Status">
+                            <span className={`hr-status ${status}`}>
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </span>
+                          </td>
+                          <td data-label="Requests">{statusCounts[index]}</td>
+                          <td data-label="% of Total">{statusPercentages[index]}%</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td data-label="Status"><strong>Total ({year})</strong></td>
+                        <td data-label="Requests"><strong>{statusTotal}</strong></td>
+                        <td data-label="% of Total"><strong>{statusTotal ? 100 : 0}%</strong></td>
+                      </tr>
+                    </tbody>
 
                   </table>
-                </Panel>
-              </div>
-
-              <div className="hr-span-4">
-                <Panel
-                  title="Employee Directory"
-                  subtitle="Search and view employee records."
-                >
-                  <input
-                    className="hr-search"
-                    placeholder="Search employee..."
-                    value={employeeSearch}
-                    onChange={(e) =>
-                      setEmployeeSearch(e.target.value)
-                    }
-                    aria-label="Search employees"
-                  />
-
-                  <div className="hr-table-scroll">
-                    <table className="hr-table">
-                      <thead>
-                        <tr>
-                          <th>Employee</th>
-                          <th>Department</th>
-                          <th>On Leave</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredEmployees
-                          .filter((p) => p.role !== 'hr')
-                          .slice(0, 5)
-                          .map((person) => (
-                            <tr key={person.id}>
-                              <td data-label="Employee">
-                                {person.full_name}
-                              </td>
-                              <td data-label="Department">
-                                {departmentName(person.department_id)}
-                              </td>
-                              <td data-label="On Leave">
-                                <Pill
-                                  kind={
-                                    onLeaveToday(person.id)
-                                      ? 'yes'
-                                      : 'no'
-                                  }
-                                  value={
-                                    onLeaveToday(person.id)
-                                      ? 'Yes'
-                                      : 'No'
-                                  }
-                                />
-                              </td>
-                              <td data-label="Action">
-                                <button
-                                  type="button"
-                                  className="hr-button outline"
-                                  onClick={() => {
-                                    setDepartmentFilter('');
-                                    onNavigate('hr-employees');
-                                    void selectEmployee(person);
-                                  }}
-                                >
-                                  View Record ›
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
                 </Panel>
               </div>
 
@@ -1273,10 +1354,53 @@ export default function HRDashboard({
               ))}
             </div>
 
+            {departmentFilter && (
+              <div className="hr-table-scroll" style={{ marginTop: 12 }}>
+                <h3 style={{ margin: '8px 0' }}>
+                  {departmentName(departmentFilter)} — Leave Requests ({year})
+                </h3>
+                {yearCompanyRequests.filter((r) => r.department_id === departmentFilter).length === 0 ? (
+                  <p>No requests for this department in {year}.</p>
+                ) : (
+                  <table className="hr-table">
+                    <thead>
+                      <tr>
+                        <th>Employee</th><th>Role</th><th>Type</th><th>Dates</th>
+                        <th>Days</th><th>Status</th><th>Approved By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {yearCompanyRequests
+                        .filter((r) => r.department_id === departmentFilter)
+                        .sort((a, b) => b.start_date.localeCompare(a.start_date))
+                        .map((r) => (
+                          <tr key={r.id}>
+                            <td data-label="Employee">{personName(r.user_id)}</td>
+                            <td data-label="Role">{peopleById.get(r.user_id)?.role}</td>
+                            <td data-label="Type">{leaveTypeLabel(r.leave_type)}</td>
+                            <td data-label="Dates">{formatDate(r.start_date)} – {formatDate(r.end_date)}</td>
+                            <td data-label="Days">{r.working_days}</td>
+                            <td data-label="Status">
+                              <span className={`hr-status ${r.status}`}>{r.status}</span>
+                            </td>
+                            <td data-label="Approved By">
+                              {r.decided_by ? personName(r.decided_by) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
             {selectedEmployee && (
               <section className="hr-selected-employee">
                 <h3>{selectedEmployee.full_name}</h3>
-                <p>{selectedEmployee.email}</p>
+                <p>
+                  {selectedEmployee.email} · {departmentName(selectedEmployee.department_id)}
+                  {' · '}{selectedEmployee.role === 'manager' ? 'Manager' : selectedEmployee.role === 'staff' ? 'Staff' : 'HR'}
+                </p>
 
                 {balanceLoading ? (
                   <p>Loading balance...</p>
@@ -1300,10 +1424,50 @@ export default function HRDashboard({
                       value={balance.reserved}
                       color="orange"
                     />
+                    <Stat
+                      icon="▣"
+                      label="Remaining"
+                      value={balance.remaining ?? 'Not assigned'}
+                      color="lavender"
+                    />
                   </div>
                 ) : (
                   <p>No balance available.</p>
                 )}
+
+                <div className="hr-table-scroll" style={{ marginTop: 12 }}>
+                  <h4 style={{ margin: '8px 0' }}>Leave Requests &amp; Approvals ({year})</h4>
+                  {yearRequests.filter((r) => r.user_id === selectedEmployee.id).length === 0 ? (
+                    <p>No leave requests for the selected year.</p>
+                  ) : (
+                    <table className="hr-table">
+                      <thead>
+                        <tr>
+                          <th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Decision by</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {yearRequests
+                          .filter((r) => r.user_id === selectedEmployee.id)
+                          .sort((a, b) => b.start_date.localeCompare(a.start_date))
+                          .map((r) => (
+                            <tr key={r.id}>
+                              <td data-label="Type">{leaveTypeLabel(r.leave_type)}</td>
+                              <td data-label="Dates">{formatDate(r.start_date)} – {formatDate(r.end_date)}</td>
+                              <td data-label="Days">{r.working_days}</td>
+                              <td data-label="Status">
+                                <span className={`hr-status ${r.status}`}>{r.status}</span>
+                              </td>
+                              <td data-label="Decision by">
+                                {r.decided_by ? personName(r.decided_by) : 'Awaiting decision'}
+                                {r.decision_comment ? ` · ${r.decision_comment}` : ''}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
 
                 <div className="hr-entitlement-editor">
                   <label htmlFor="hr-entitlement">
