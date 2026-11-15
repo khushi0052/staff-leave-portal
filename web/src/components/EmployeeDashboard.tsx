@@ -103,13 +103,22 @@ const staffNavigation: NavigationItem[] = [
   },
 ];
 const managerNavigation: NavigationItem[] = [
-  { id: 'approvals', label: 'Department Dashboard', icon: '⌂' },
-  { id: 'request', label: 'Request Leave', icon: '✚' },
-  { id: 'requests', label: 'My Requests', icon: '▤' },
-  { id: 'calendar', label: 'Team Calendar', icon: '▦' },
-  { id: 'overview', label: 'My Leave', icon: '◷' },
+  {
+    id: 'approvals',
+    label: 'Department Dashboard',
+    icon: '⌂',
+  },
+  {
+    id: 'overview',
+    label: 'My Leave',
+    icon: '◷',
+  },
+  {
+    id: 'calendar',
+    label: 'Team Calendar',
+    icon: '▦',
+  },
 ];
-
 const hrNavigation: NavigationItem[] = [
   { id: 'hr', label: 'HR Head Dashboard', icon: '⌂' },
   { id: 'hr-requests', label: 'Leave Requests', icon: '▤' },
@@ -320,10 +329,10 @@ export default function EmployeeDashboard({
     };
   }, [userId, currentYear, refreshKey]);
 
-  // Staff-only read queries. The logged-in user ID filters both queries.
+  // Personal leave queries for Staff and Manager, always filtered by user ID.
   // Supabase RLS remains the security boundary.
   useEffect(() => {
-    if (profile?.role !== 'staff') return;
+    if (profile?.role !== 'staff' && profile?.role !== 'manager') return;
 
     let active = true;
 
@@ -354,7 +363,7 @@ export default function EmployeeDashboard({
   }, [userId, profile?.role, refreshKey]);
 
   useEffect(() => {
-    if (profile?.role !== 'staff' || !profile.department_id) return;
+    if ((profile?.role !== 'staff' && profile?.role !== 'manager') || !profile.department_id) return;
     let active = true;
 
     async function loadDepartmentManager() {
@@ -454,7 +463,9 @@ export default function EmployeeDashboard({
   const visiblePage: Page =
     role === 'staff' && requestedPage !== 'calendar'
       ? 'overview'
-      : requestedPage;
+      : role === 'manager' && (requestedPage === 'request' || requestedPage === 'requests')
+        ? 'overview'
+        : requestedPage;
 
   const displayValue = (value: number | null) =>
     value === null ? '—' : String(value);
@@ -580,11 +591,11 @@ export default function EmployeeDashboard({
             <div>
               <h1>{role === 'staff' && visiblePage === 'calendar'
                 ? 'My Leave Calendar' : pageTitles[visiblePage]}</h1>
-              <p>{role === 'staff'
-                ? visiblePage === 'calendar'
+              <p>{visiblePage === 'overview' && role !== 'hr'
+                ? 'Apply for leave, view your balance, and track your request status.'
+                : role === 'staff' && visiblePage === 'calendar'
                   ? 'View your own approved, pending, rejected and cancelled leave requests.'
-                  : 'Apply for leave, view your balance, and track your request status.'
-                : pageDescriptions[visiblePage]}</p>
+                  : pageDescriptions[visiblePage]}</p>
             </div>
           </div>
 
@@ -599,8 +610,8 @@ export default function EmployeeDashboard({
           </p>
         )}
 
-        {/* STAFF MY LEAVE: all sections are visible on one page. */}
-        {role === 'staff' && visiblePage === 'overview' && (
+        {/* SHARED MY LEAVE: Staff and Manager use the same layout and personal data. */}
+        {(role === 'staff' || role === 'manager') && visiblePage === 'overview' && (
           <div className="staff-my-leave">
             <style>{`
               .staff-my-leave { display: grid; gap: 14px; }
@@ -676,7 +687,7 @@ export default function EmployeeDashboard({
                       <div className="sm-detail-row"><strong>Leave Type</strong><span>{latestRequest ? leaveTypeLabel(latestRequest.leave_type) : 'No Request'}</span></div>
                       <div className="sm-detail-row"><strong>Dates</strong><span>{latestRequest ? `${formatLeaveDate(latestRequest.start_date)} – ${formatLeaveDate(latestRequest.end_date)} (${latestRequest.working_days} Days)` : '—'}</span></div>
                       <div className="sm-detail-row"><strong>Status</strong><span>{latestRequest ? <span className={`sm-status ${latestRequest.status}`}>{latestRequest.status.charAt(0).toUpperCase() + latestRequest.status.slice(1)}</span> : 'No Request'}</span></div>
-                      <div className="sm-detail-row"><strong>Approver</strong><span>{departmentManagerName}</span></div>
+                      <div className="sm-detail-row"><strong>Approver</strong><span>{role === 'manager' ? 'HR Head' : departmentManagerName}</span></div>
                       <div className="sm-detail-row"><strong>Manager Comment</strong><span><i>{latestRequest?.decision_comment || (latestRequest?.status === 'pending' ? 'Awaiting review.' : '—')}</i></span></div>
                     </div>
                     <aside className="sm-policy">
@@ -692,135 +703,6 @@ export default function EmployeeDashboard({
               </div>
             </div>
           </div>
-        )}
-
-        {/* MANAGER PERSONAL OVERVIEW: unchanged */}
-
-        {visiblePage === 'overview' && role === 'manager' && (
-          <>
-            <div className="ld-stats-grid three">
-              <StatCard
-                label="Assigned Annual Leave"
-                value={displayValue(balance.entitlement)}
-                color="blue"
-                icon="▦"
-              />
-
-              <StatCard
-                label="Approved Annual Leave"
-                value={String(balance.approved)}
-                color="green"
-                icon="✓"
-              />
-
-              <StatCard
-                label="Pending Annual Leave"
-                value={String(balance.pending)}
-                color="orange"
-                icon="◷"
-              />
-            </div>
-
-            <div className="ld-content-grid">
-              <section className="ld-panel ld-col-6">
-                <div className="ld-panel-header">
-                  <div className="ld-panel-title">
-                    <span className="ld-panel-icon">
-                      ▦
-                    </span>
-                    <div>
-                      <h2>Annual Leave Balance</h2>
-                      <p>
-                        Your leave summary for {currentYear}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="ld-balance-grid three">
-                  <div className="ld-balance-tile">
-                    <span>Assigned</span>
-                    <strong>
-                      {displayValue(balance.entitlement)}
-                    </strong>
-                  </div>
-
-                  <div className="ld-balance-tile green">
-                    <span>Approved</span>
-                    <strong>{balance.approved}</strong>
-                  </div>
-
-                  <div className="ld-balance-tile orange">
-                    <span>Pending</span>
-                    <strong>{balance.pending}</strong>
-                  </div>
-                </div>
-
-                <p className="ld-muted">
-                  Remaining: {displayValue(balance.remaining)}
-                  {' · '}
-                  Available to request:{' '}
-                  {displayValue(balance.available)} days
-                </p>
-              </section>
-
-              <section className="ld-panel ld-col-6">
-                <div className="ld-panel-header">
-                  <div className="ld-panel-title">
-                    <span className="ld-panel-icon">
-                      ✦
-                    </span>
-                    <div>
-                      <h2>Quick Actions</h2>
-                      <p>Manage your leave.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="ld-quick-actions">
-                  <button
-                    type="button"
-                    className="ld-btn ld-btn-primary"
-                    onClick={() => setActivePage('request')}
-                  >
-                    Request Leave
-                  </button>
-
-                  <button
-                    type="button"
-                    className="ld-btn ld-btn-outline"
-                    onClick={() => setActivePage('requests')}
-                  >
-                    View My Requests
-                  </button>
-
-                  <button
-                    type="button"
-                    className="ld-btn ld-btn-outline"
-                    onClick={() => setActivePage('calendar')}
-                  >
-                    Open Team Calendar
-                  </button>
-                </div>
-              </section>
-            </div>
-          </>
-        )}
-
-        {/* LEAVE REQUEST FORM */}
-
-        {visiblePage === 'request' && role === 'manager' && (
-          <section className="ld-panel">
-            {requestForm}
-          </section>
-        )}
-
-        {/* MY LEAVE REQUESTS */}
-
-        {visiblePage === 'requests' && role === 'manager' && (
-          <section className="ld-panel">
-            {myRequests}
-          </section>
         )}
 
         {/* TEAM CALENDAR */}
