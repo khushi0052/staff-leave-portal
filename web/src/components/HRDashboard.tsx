@@ -169,6 +169,10 @@ export default function HRDashboard({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [requestsDepartment, setRequestsDepartment] = useState('');
+  const [requestsRole, setRequestsRole] = useState('');
+  const [requestsStatus, setRequestsStatus] = useState('');
+  const [requestsPage, setRequestsPage] = useState(1);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -347,6 +351,40 @@ export default function HRDashboard({
     (r) =>
       r.status === 'pending' &&
       peopleById.get(r.user_id)?.role === 'manager'
+  );
+
+  // Company-wide view: Staff and Managers across every department.
+  // Supabase RLS determines which records HR is permitted to read.
+  const companyRequests = useMemo(
+    () => requests
+      .filter((request) => {
+        const role = peopleById.get(request.user_id)?.role;
+        return role === 'staff' || role === 'manager';
+      })
+      .sort((a, b) =>
+        b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)
+      ),
+    [requests, peopleById]
+  );
+
+  const filteredCompanyRequests = companyRequests.filter((request) => {
+    const role = peopleById.get(request.user_id)?.role;
+    return (
+      (!requestsDepartment || request.department_id === requestsDepartment) &&
+      (!requestsRole || role === requestsRole) &&
+      (!requestsStatus || request.status === requestsStatus)
+    );
+  });
+
+  const requestPageSize = 25;
+  const requestPageCount = Math.max(
+    1,
+    Math.ceil(filteredCompanyRequests.length / requestPageSize)
+  );
+  const currentRequestsPage = Math.min(requestsPage, requestPageCount);
+  const displayedCompanyRequests = filteredCompanyRequests.slice(
+    (currentRequestsPage - 1) * requestPageSize,
+    currentRequestsPage * requestPageSize
   );
 
   const approvedToday = employees.filter((person) =>
@@ -637,6 +675,98 @@ export default function HRDashboard({
     }
   }
 
+  function renderCompanyRequestsTable(records: Request[]) {
+    if (records.length === 0) {
+      return <p>No leave requests match the selected filters.</p>;
+    }
+
+    return (
+      <div className="hr-table-scroll">
+        <table className="hr-table">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Role</th>
+              <th>Department</th>
+              <th>Leave Type</th>
+              <th>Start Date</th>
+              <th>End Date</th>
+              <th>Days</th>
+              <th>Status</th>
+              <th>Approved By</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {records.map((request) => {
+              const employeeRole = peopleById.get(request.user_id)?.role;
+              const canHRReview =
+                employeeRole === 'manager' && request.status === 'pending';
+              const leaveType =
+                request.leave_type === 'annual'
+                  ? 'Annual Leave'
+                  : request.leave_type === 'sick'
+                    ? 'Sick Leave'
+                    : 'Unpaid Leave';
+
+              return (
+                <tr key={request.id}>
+                  <td data-label="Employee">{personName(request.user_id)}</td>
+                  <td data-label="Role">
+                    {employeeRole === 'manager' ? 'Manager' : 'Staff'}
+                  </td>
+                  <td data-label="Department">
+                    {departmentName(request.department_id)}
+                  </td>
+                  <td data-label="Leave Type">{leaveType}</td>
+                  <td data-label="Start Date">{formatDate(request.start_date)}</td>
+                  <td data-label="End Date">{formatDate(request.end_date)}</td>
+                  <td data-label="Days">{request.working_days}</td>
+                  <td data-label="Status">
+                    <span className={`hr-status ${request.status}`}>
+                      {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                    </span>
+                  </td>
+                  <td data-label="Approved By">
+                    {request.status === 'approved'
+                      ? personName(request.decided_by)
+                      : '—'}
+                  </td>
+                  <td data-label="Action">
+                    {canHRReview ? (
+                      <div className="hr-actions">
+                        <button
+                          type="button"
+                          className="hr-button approve"
+                          disabled={busy}
+                          onClick={() => void reviewRequest(request.id, 'approved')}
+                        >
+                          ✓ Approve
+                        </button>
+                        <button
+                          type="button"
+                          className="hr-button reject"
+                          disabled={busy}
+                          onClick={() => void reviewRequest(request.id, 'rejected')}
+                        >
+                          × Reject
+                        </button>
+                      </div>
+                    ) : request.status === 'pending' ? (
+                      <span>Department manager review</span>
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   if (loading) {
     return <p>Loading HR dashboard information...</p>;
   }
@@ -784,73 +914,21 @@ export default function HRDashboard({
 
               <div className="hr-span-6">
                 <Panel
-                  title="Department Head Leave Requests"
-                  subtitle="Managers awaiting HR approval."
+                  title="Company-Wide Leave Requests"
+                  subtitle="Latest Staff and Manager requests from all departments."
                 >
-                  {pendingManagers.length === 0 ? (
-                    <p>No pending department head requests.</p>
-                  ) : (
-                    <div className="hr-table-scroll">
-                      <table className="hr-table">
-                        <thead>
-                          <tr>
-                            <th>Requestor</th>
-                            <th>Department</th>
-                            <th>Leave Type</th>
-                            <th>Dates</th>
-                            <th>Days</th>
-                            <th>Status / Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pendingManagers.slice(0, 5).map((r) => (
-                            <tr key={r.id}>
-                              <td data-label="Requestor">
-                                {personName(r.user_id)}
-                              </td>
-                              <td data-label="Department">
-                                {departmentName(r.department_id)}
-                              </td>
-                              <td data-label="Leave Type">
-                                {r.leave_type}
-                              </td>
-                              <td data-label="Dates">
-                                {formatDate(r.start_date)} –{' '}
-                                {formatDate(r.end_date)}
-                              </td>
-                              <td data-label="Days">
-                                {r.working_days}
-                              </td>
-                              <td data-label="Action">
-                                <div className="hr-actions">
-                                  <button
-                                    type="button"
-                                    className="hr-button approve"
-                                    disabled={busy}
-                                    onClick={() =>
-                                      void reviewRequest(r.id, 'approved')
-                                    }
-                                  >
-                                    ✓ Approve
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="hr-button reject"
-                                    disabled={busy}
-                                    onClick={() =>
-                                      void reviewRequest(r.id, 'rejected')
-                                    }
-                                  >
-                                    × Reject
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  {renderCompanyRequestsTable(companyRequests.slice(0, 8))}
+                  <p style={{ marginTop: 12 }}>
+                    Showing {Math.min(8, companyRequests.length)} of{' '}
+                    {companyRequests.length} company requests.
+                  </p>
+                  <button
+                    type="button"
+                    className="hr-button outline"
+                    onClick={() => onNavigate('hr-requests')}
+                  >
+                    View All Leave Requests ›
+                  </button>
                 </Panel>
               </div>
 
@@ -1034,77 +1112,84 @@ export default function HRDashboard({
 
         {view === 'hr-requests' && (
           <Panel
-            title="Department Head Leave Requests"
-            subtitle="Review pending manager leave requests."
+            title="Company-Wide Leave Requests"
+            subtitle="Staff and Manager leave requests across all departments. HR can review pending Manager requests."
           >
-            {pendingManagers.length === 0 ? (
-              <p>No manager leave requests awaiting HR approval.</p>
-            ) : (
-              <div className="hr-table-scroll">
-                <table className="hr-table">
-                  <thead>
-                    <tr>
-                      <th>Requestor</th>
-                      <th>Department</th>
-                      <th>Leave Type</th>
-                      <th>Dates</th>
-                      <th>Days</th>
-                      <th>Status / Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingManagers.map((request) => (
-                      <tr key={request.id}>
-                        <td data-label="Requestor">
-                          {personName(request.user_id)}
-                        </td>
-                        <td data-label="Department">
-                          {departmentName(request.department_id)}
-                        </td>
-                        <td data-label="Leave Type">
-                          {request.leave_type}
-                        </td>
-                        <td data-label="Dates">
-                          {formatDate(request.start_date)} –{' '}
-                          {formatDate(request.end_date)}
-                        </td>
-                        <td data-label="Days">
-                          {request.working_days}
-                        </td>
-                        <td data-label="Action">
-                          <div className="hr-actions">
-                            <button
-                              type="button"
-                              className="hr-button approve"
-                              disabled={busy}
-                              onClick={() =>
-                                void reviewRequest(
-                                  request.id,
-                                  'approved'
-                                )
-                              }
-                            >
-                              ✓ Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="hr-button reject"
-                              disabled={busy}
-                              onClick={() =>
-                                void reviewRequest(
-                                  request.id,
-                                  'rejected'
-                                )
-                              }
-                            >
-                              × Reject
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="hr-filters" style={{ marginBottom: 16 }}>
+              <label>
+                Department
+                <select
+                  value={requestsDepartment}
+                  onChange={(event) => {
+                    setRequestsDepartment(event.target.value);
+                    setRequestsPage(1);
+                  }}
+                >
+                  <option value="">All departments</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Employee Role
+                <select
+                  value={requestsRole}
+                  onChange={(event) => {
+                    setRequestsRole(event.target.value);
+                    setRequestsPage(1);
+                  }}
+                >
+                  <option value="">Staff and Managers</option>
+                  <option value="staff">Staff only</option>
+                  <option value="manager">Managers only</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select
+                  value={requestsStatus}
+                  onChange={(event) => {
+                    setRequestsStatus(event.target.value);
+                    setRequestsPage(1);
+                  }}
+                >
+                  <option value="">All statuses</option>
+                  {LEAVE_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p>
+              Showing {displayedCompanyRequests.length} of{' '}
+              <strong>{filteredCompanyRequests.length}</strong> matching requests
+              {' '}({companyRequests.length} company-wide).
+            </p>
+            {renderCompanyRequestsTable(displayedCompanyRequests)}
+            {requestPageCount > 1 && (
+              <div className="hr-actions" style={{ alignItems: 'center', marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="hr-button outline"
+                  disabled={currentRequestsPage === 1}
+                  onClick={() => setRequestsPage((page) => Math.max(1, page - 1))}
+                >
+                  Previous
+                </button>
+                <span>Page {currentRequestsPage} of {requestPageCount}</span>
+                <button
+                  type="button"
+                  className="hr-button outline"
+                  disabled={currentRequestsPage >= requestPageCount}
+                  onClick={() => setRequestsPage((page) => Math.min(requestPageCount, page + 1))}
+                >
+                  Next
+                </button>
               </div>
             )}
           </Panel>
