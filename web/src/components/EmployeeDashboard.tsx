@@ -233,6 +233,29 @@ export default function EmployeeDashboard({
   // The starting tab is determined by their role.
   const [activePage, setActivePage] = useState<Page | null>(null);
 
+  // Keep personal leave and team calendar current after changes in other sessions.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`employee-leave-refresh-${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'leave_requests',
+      }, () => setRefreshKey((value) => value + 1))
+      .subscribe();
+    const onFocus = () => setRefreshKey((value) => value + 1);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') onFocus();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const currentYear = new Date().getFullYear();
   const [selectedHRYear, setSelectedHRYear] = useState(currentYear);
 
@@ -533,7 +556,7 @@ export default function EmployeeDashboard({
                   ? 'page'
                   : undefined
               }
-              onClick={() => setActivePage(item.id)}
+              onClick={() => { setActivePage(item.id); setRefreshKey((value) => value + 1); }}
             >
               <span
                 className="ld-nav-icon"

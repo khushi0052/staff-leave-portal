@@ -99,6 +99,7 @@ export default function ManagerDashboard({
   const [message, setMessage] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [authorized, setAuthorized] = useState(false);
+  const [decidedIds, setDecidedIds] = useState<string[]>([]);
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -169,7 +170,7 @@ export default function ManagerDashboard({
             p_user: person.id,
             p_year: year,
           });
-          if (balanceError) return [person.id, null] as const;
+          if (balanceError) throw balanceError;
           return [person.id, parseBalance(data)] as const;
         })
       );
@@ -188,6 +189,7 @@ export default function ManagerDashboard({
       setStaff(employees);
       setDepartmentName(departmentResult.data.name);
       setRequests(allRequests.filter((request) => staffIds.has(request.user_id)));
+      setDecidedIds([]);
       setBalances(balanceByPerson);
       setManagerBalance(parseBalance(ownBalanceData));
     } catch (err) {
@@ -204,6 +206,36 @@ export default function ManagerDashboard({
     void loadDashboard(() => active);
     return () => { active = false; };
   }, [loadDashboard, refreshKey]);
+
+  // Refresh when HR or a staff member changes a team request in another session.
+  // This is a display refresh only. Supabase RLS controls which rows can be read.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`manager-team-requests-${managerId}-${departmentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'leave_requests',
+          filter: `department_id=eq.${departmentId}`,
+        },
+        () => setRefreshKey((value) => value + 1)
+      )
+      .subscribe();
+
+    const onFocus = () => setRefreshKey((value) => value + 1);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') onFocus();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      void supabase.removeChannel(channel);
+    };
+  }, [departmentId, managerId]);
 
   const staffById = useMemo(
     () => new Map(staff.map((person) => [person.id, person])),
@@ -237,7 +269,8 @@ export default function ManagerDashboard({
     const latest = new Map<string, TeamRequest>();
     for (const request of requests) {
       const previous = latest.get(request.user_id);
-      if (!previous || request.created_at > previous.created_at) {
+      if (!previous || request.created_at > previous.created_at ||
+        (request.created_at === previous.created_at && request.id > previous.id)) {
         latest.set(request.user_id, request);
       }
     }
@@ -270,7 +303,8 @@ export default function ManagerDashboard({
     requestId: string,
     decision: 'approved' | 'rejected'
   ) {
-    if (actionId !== null) return;
+    if (actionId !== null || decidedIds.includes(requestId) ||
+      !pendingRequests.some((request) => request.id === requestId)) return;
     const comment = (comments[requestId] ?? '').trim();
 
     if (decision === 'rejected' && !comment) {
@@ -290,6 +324,7 @@ export default function ManagerDashboard({
       });
       if (reviewError) throw reviewError;
       setMessage(`Leave request ${decision} successfully.`);
+      setDecidedIds((previous) => [...previous, requestId]);
       setComments((previous) => ({ ...previous, [requestId]: '' }));
       setRefreshKey((value) => value + 1);
     } catch (err) {
@@ -384,8 +419,8 @@ export default function ManagerDashboard({
                             onChange={(event) => setComments((previous) => ({ ...previous, [request.id]: event.target.value }))}
                           />
                           <div className="md-actions">
-                            <button type="button" className="md-button md-approve" disabled={actionId !== null} onClick={() => void handleDecision(request.id, 'approved')}>✓ Approve</button>
-                            <button type="button" className="md-button md-reject" disabled={actionId !== null} onClick={() => void handleDecision(request.id, 'rejected')}>× Reject</button>
+                            <button type="button" className="md-button md-approve" disabled={actionId !== null || decidedIds.includes(request.id)} onClick={() => void handleDecision(request.id, 'approved')}>✓ Approve</button>
+                            <button type="button" className="md-button md-reject" disabled={actionId !== null || decidedIds.includes(request.id)} onClick={() => void handleDecision(request.id, 'rejected')}>× Reject</button>
                           </div>
                         </td>
                       </tr>
@@ -422,15 +457,6 @@ export default function ManagerDashboard({
           </div>
         </section>
 
-        <section className="md-panel">
-          <div className="md-panel-heading"><h3>Team Calendar Snapshot</h3><p>Today's approved leave in your department.</p></div>
-          <div className="md-today-number">{new Set(todayLeaves.map((r) => r.user_id)).size}<span> Team Members on Leave Today</span></div>
-          <div className="md-day-list">
-            {todayLeaves.length === 0 ? <p className="md-empty">No team members on approved leave today.</p> : todayLeaves.map((request) => (
-              <div className="md-day-person" key={request.id}><strong>{employeeName(request.user_id)}</strong><small>{readableType(request.leave_type)}</small></div>
-            ))}
-          </div>
-        </section>
       </div>
     </section>
   );
@@ -450,12 +476,14 @@ const managerStyles = `
 .manager-compact .md-stat strong{display:block;font-size:23px;line-height:1.1;font-weight:800;color:#10234f}
 .manager-compact .md-stat span:last-child{display:block;margin-top:3px;color:#334155;font-size:11px}
 .manager-compact .md-grid{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;align-items:start}
-.manager-compact .md-bottom{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:10px;margin-top:10px;align-items:start}
+.manager-compact .md-bottom{display:grid;grid-template-columns:1fr 1.2fr;gap:10px;margin-top:10px;align-items:start}
 .manager-compact .md-panel{min-width:0;padding:12px;background:#fff;border:1px solid #dce4f3;border-radius:12px;box-shadow:0 3px 14px #0f2a5c09}
 .manager-compact .md-panel-heading{margin-bottom:8px}
 .manager-compact .md-panel-heading h3{font-size:15px;font-weight:800;margin:0;color:#10234f}
 .manager-compact .md-panel-heading p{margin:3px 0 0;font-size:11px;color:#64748b}
 .manager-compact .md-scroll{overflow-x:auto;max-height:360px;overflow-y:auto}
+.manager-compact .md-table td{line-height:1.4}
+.manager-compact .md-day-person{min-height:35px}
 .manager-compact .md-approvals-scroll{max-height:360px}
 .manager-compact .md-table{width:100%;border-collapse:collapse;text-align:left;font-size:11px}
 .manager-compact .md-table th{background:#edf1f7;color:#10234f;font-weight:800;padding:9px 7px;white-space:nowrap;position:sticky;top:0;z-index:1}
