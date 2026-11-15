@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 type LeaveType = 'annual' | 'sick' | 'unpaid';
-type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'withdrawn';
 
 type StaffProfile = {
   id: string;
@@ -491,7 +491,7 @@ const managerStyles = `
 .manager-compact .md-table td strong{font-size:11px}
 .manager-compact .md-cell-note{display:block;margin-top:5px;color:#64748b;max-width:170px;overflow-wrap:anywhere}
 .manager-compact .md-status{display:inline-flex;align-items:center;justify-content:center;padding:5px 9px;border-radius:7px;font-weight:700;font-size:10px;white-space:nowrap}
-.manager-compact .md-status-pending{background:#fef3c7;color:#b45309}.manager-compact .md-status-approved{background:#dcfce7;color:#15803d}.manager-compact .md-status-rejected{background:#fee2e2;color:#b91c1c}.manager-compact .md-status-cancelled,.manager-compact .md-status-none{background:#f3f4f6;color:#4b5563}
+.manager-compact .md-status-pending{background:#fef3c7;color:#b45309}.manager-compact .md-status-approved{background:#dcfce7;color:#15803d}.manager-compact .md-status-rejected{background:#fee2e2;color:#b91c1c}.manager-compact .md-status-cancelled,.manager-compact .md-status-withdrawn,.manager-compact .md-status-none{background:#f3f4f6;color:#4b5563}
 .manager-compact .md-yesno{display:inline-block;min-width:36px;text-align:center;padding:5px 8px;border-radius:6px;font-size:10px;font-weight:700}
 .manager-compact .md-yesno.yes{background:#dcfce7;color:#15803d}.manager-compact .md-yesno.no{background:#f3f4f6;color:#4b5563}
 .manager-compact .md-action-cell{min-width:176px}

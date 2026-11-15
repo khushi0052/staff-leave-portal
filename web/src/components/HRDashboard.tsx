@@ -6,13 +6,14 @@ import AddEmployeeForm from './AddEmployeeForm';
 
 type Role = 'staff' | 'manager' | 'hr';
 type LeaveType = 'annual' | 'sick' | 'unpaid';
-type Status = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type Status = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'withdrawn';
 
 const LEAVE_STATUSES: Status[] = [
   'approved',
   'pending',
   'rejected',
   'cancelled',
+  'withdrawn',
 ];
 
 type HRView =
@@ -268,7 +269,16 @@ export default function HRDashboard({
     // Refresh when HR returns from another tab or window after decisions.
     const refreshOnFocus = () => { void loadData(); };
     window.addEventListener('focus', refreshOnFocus);
-    return () => window.removeEventListener('focus', refreshOnFocus);
+    // Live refresh for HR when an employee withdraws or a manager decides.
+    // Also works on focus if Realtime is not enabled on the table.
+    const channel = supabase.channel('hr-leave-status-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' },
+        () => { void loadData(); })
+      .subscribe();
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus);
+      void supabase.removeChannel(channel);
+    };
   }, [loadData]);
 
   const peopleById = useMemo(

@@ -6,6 +6,7 @@ import MyLeaveRequests from './MyLeaveRequests';
 import ManagerDashboard from './ManagerDashboard';
 import HRDashboard from './HRDashboard';
 import TeamCalendar from './TeamCalendar';
+import StaffLeaveCalendar from './StaffLeaveCalendar';
 
 // --------------------------------------------
 // TYPES
@@ -39,30 +40,6 @@ type AnnualLeaveRequest = {
   working_days: number;
   status: string;
 };
-
-type LatestLeaveRequest = {
-  id: string;
-  leave_type: 'annual' | 'sick' | 'unpaid';
-  start_date: string;
-  end_date: string;
-  working_days: number;
-  status: 'approved' | 'pending' | 'rejected' | 'cancelled';
-  decision_comment: string | null;
-};
-
-function formatLeaveDate(date: string): string {
-  const [year, month, day] = date.split('-').map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString('en-IN', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
-}
-
-function leaveTypeLabel(type: LatestLeaveRequest['leave_type']): string {
-  if (type === 'annual') return 'Annual Leave';
-  if (type === 'sick') return 'Sick Leave';
-  return 'Unpaid Leave';
-}
-
 
 type LeaveBalance = {
   entitlement: number | null;
@@ -223,10 +200,6 @@ export default function EmployeeDashboard({
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
-  const [latestRequest, setLatestRequest] =
-    useState<LatestLeaveRequest | null>(null);
-  const [departmentManagerName, setDepartmentManagerName] =
-    useState('Department Manager');
 
 
   // Null means that the user has not selected a tab yet.
@@ -258,6 +231,7 @@ export default function EmployeeDashboard({
 
   const currentYear = new Date().getFullYear();
   const [selectedHRYear, setSelectedHRYear] = useState(currentYear);
+  const [selectedStaffYear, setSelectedStaffYear] = useState(currentYear);
 
   // ------------------------------------------
   // LOAD PROFILE AND ANNUAL LEAVE BALANCE
@@ -288,8 +262,8 @@ export default function EmployeeDashboard({
             .select('working_days, status')
             .eq('user_id', userId)
             .eq('leave_type', 'annual')
-            .gte('start_date', `${currentYear}-01-01`)
-            .lte('end_date', `${currentYear}-12-31`)
+            .gte('start_date', `${selectedStaffYear}-01-01`)
+            .lte('end_date', `${selectedStaffYear}-12-31`)
             .in('status', ['approved', 'pending']);
 
         if (requestError) throw requestError;
@@ -351,61 +325,24 @@ export default function EmployeeDashboard({
     return () => {
       active = false;
     };
-  }, [userId, currentYear, refreshKey]);
+  }, [userId, selectedStaffYear, refreshKey]);
 
-  // Personal leave queries for Staff and Manager, always filtered by user ID.
-  // Supabase RLS remains the security boundary.
+  // Count personal pending applications in the selected year.
   useEffect(() => {
     if (profile?.role !== 'staff' && profile?.role !== 'manager') return;
-
     let active = true;
-
-    async function loadStaffSummary() {
-      const [countResult, latestResult] = await Promise.all([
-        supabase
-          .from('leave_requests')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('status', 'pending'),
-        supabase
-          .from('leave_requests')
-          .select('id, leave_type, start_date, end_date, working_days, status, decision_comment')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1),
-      ]);
-
-      if (!active) return;
-      if (!countResult.error) setPendingRequestCount(countResult.count ?? 0);
-      if (!latestResult.error) {
-        setLatestRequest((latestResult.data?.[0] ?? null) as LatestLeaveRequest | null);
-      }
+    async function countPending() {
+      const { count, error: countError } = await supabase.from('leave_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .gte('start_date', `${selectedStaffYear}-01-01`)
+        .lte('end_date', `${selectedStaffYear}-12-31`);
+      if (active && !countError) setPendingRequestCount(count ?? 0);
     }
-
-    void loadStaffSummary();
+    void countPending();
     return () => { active = false; };
-  }, [userId, profile?.role, refreshKey]);
-
-  useEffect(() => {
-    if ((profile?.role !== 'staff' && profile?.role !== 'manager') || !profile.department_id) return;
-    let active = true;
-
-    async function loadDepartmentManager() {
-      const { data, error: managerError } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('department_id', profile!.department_id!)
-        .eq('role', 'manager')
-        .limit(1);
-
-      if (active && !managerError && data?.[0]?.full_name) {
-        setDepartmentManagerName(data[0].full_name);
-      }
-    }
-
-    void loadDepartmentManager();
-    return () => { active = false; };
-  }, [profile?.role, profile?.department_id]);
+  }, [userId, profile?.role, selectedStaffYear, refreshKey]);
 
   function refreshDashboard() {
     setRefreshKey((value) => value + 1);
@@ -504,10 +441,13 @@ export default function EmployeeDashboard({
       userId={userId}
       refreshKey={refreshKey}
       onChanged={refreshDashboard}
+      year={selectedStaffYear}
     />
   );
 
-  const calendar = (
+  const calendar = role === 'staff' ? (
+    <StaffLeaveCalendar userId={userId} refreshKey={refreshKey} />
+  ) : (
     <TeamCalendar
       userId={userId}
       role={role}
@@ -646,15 +586,6 @@ export default function EmployeeDashboard({
         {!(role === 'manager' && visiblePage === 'approvals') && (
         <div className="ld-page-header">
           <div className="ld-page-title">
-            {role !== 'hr' && (
-              <span
-                className="ld-page-avatar"
-                aria-hidden="true"
-              >
-                {profile.full_name.charAt(0).toUpperCase()}
-              </span>
-            )}
-
             <div>
               <h1>{role === 'staff' && visiblePage === 'calendar'
                 ? 'My Leave Calendar' : pageTitles[visiblePage]}</h1>
@@ -680,9 +611,19 @@ export default function EmployeeDashboard({
                 )}
               </select>
             </label>
-          ) : (
-            <span className="ld-year-picker">{currentYear}</span>
-          )}
+          ) : visiblePage === 'overview' ? (
+            <label className="ld-year-picker" htmlFor="staff-dashboard-year" style={{ display: 'flex', alignItems: 'center' }}>
+              <select
+                id="staff-dashboard-year"
+                aria-label="Dashboard year"
+                value={selectedStaffYear}
+                onChange={(event) => setSelectedStaffYear(Number(event.target.value))}
+                style={{ width: 100, minWidth: 100, padding: '7px 12px', borderRadius: 8, border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#10234f' }}
+              >
+                {Array.from({ length: 7 }, (_, i) => currentYear + 1 - i).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </label>
+          ) : null}
         </div>
         )}
 
@@ -696,12 +637,13 @@ export default function EmployeeDashboard({
         {(role === 'staff' || role === 'manager') && visiblePage === 'overview' && (
           <div className="staff-my-leave">
             <style>{`
-              .staff-my-leave { display: grid; gap: 14px; }
+              .staff-my-leave { display: grid; gap: 10px; }
               .staff-my-leave * { box-sizing: border-box; }
               .staff-my-leave .sm-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
               .staff-my-leave .sm-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.27fr); gap: 12px; align-items: start; }
               .staff-my-leave .sm-column { display: grid; gap: 12px; min-width: 0; }
-              .staff-my-leave .sm-panel { border: 1px solid #dce4f3; background: #fff; border-radius: 12px; padding: 14px; min-width: 0; box-shadow: 0 3px 14px rgba(15,42,92,.06); }
+              .staff-my-leave .sm-stats .ld-stat-card { min-height: 98px; height: 100%; }
+              .staff-my-leave .sm-panel { border: 1px solid #dce4f3; background: #fff; border-radius: 12px; padding: 12px; min-width: 0; box-shadow: 0 3px 14px rgba(15,42,92,.06); }
               .staff-my-leave .sm-panel h2 { margin: 0; font-size: 16px; font-weight: 800; color: #10234f; }
               .staff-my-leave .sm-subtitle { color: #64748b; font-size: 11px; margin: 3px 0 11px; }
               .staff-my-leave .sm-balance { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 4px; }
@@ -733,16 +675,16 @@ export default function EmployeeDashboard({
             `}</style>
 
             <div className="sm-stats">
-              <StatCard label="Entitlement" value={`${displayValue(balance.entitlement)} Days`} color="blue" icon="▦" />
-              <StatCard label="Used" value={`${balance.approved} Days`} color="orange" icon="◷" />
-              <StatCard label="Remaining" value={`${displayValue(balance.remaining)} Days`} color="green" icon="✓" />
-              <StatCard label="Pending Request" value={String(pendingRequestCount)} color="purple" icon="♙" />
+              <StatCard label="Annual Entitlement" value={`${displayValue(balance.entitlement)} Days`} color="blue" icon="▦" />
+              <StatCard label="Approved Leave" value={`${balance.approved} Days`} color="orange" icon="◷" />
+              <StatCard label="Remaining Balance" value={`${displayValue(balance.remaining)} Days`} color="green" icon="✓" />
+              <StatCard label="Pending Requests" value={String(pendingRequestCount)} color="purple" icon="♙" />
             </div>
 
             <div className="sm-columns">
               <div className="sm-column">
                 <section className="sm-panel">
-                  <h2>▦ Annual Leave Balance — {currentYear}</h2>
+                  <h2>▦ Annual Leave Balance — {selectedStaffYear}</h2>
                   <p className="sm-subtitle">Your annual leave summary for the selected year.</p>
                   <div className="sm-balance">
                     <div className="sm-balance-item"><span>Entitlement</span><strong>{displayValue(balance.entitlement)} Days</strong></div>
@@ -761,27 +703,14 @@ export default function EmployeeDashboard({
                 <section className="sm-panel" aria-label="My Leave Requests">
                   {myRequests}
                 </section>
-                <section className="sm-panel">
-                  <h2>ⓘ Latest Request Status</h2>
-                  <p className="sm-subtitle">Details of your most recent leave request.</p>
-                  <div className="sm-detail-layout">
-                    <div className="sm-detail-table">
-                      <div className="sm-detail-row"><strong>Leave Type</strong><span>{latestRequest ? leaveTypeLabel(latestRequest.leave_type) : 'No Request'}</span></div>
-                      <div className="sm-detail-row"><strong>Dates</strong><span>{latestRequest ? `${formatLeaveDate(latestRequest.start_date)} – ${formatLeaveDate(latestRequest.end_date)} (${latestRequest.working_days} Days)` : '—'}</span></div>
-                      <div className="sm-detail-row"><strong>Status</strong><span>{latestRequest ? <span className={`sm-status ${latestRequest.status}`}>{latestRequest.status.charAt(0).toUpperCase() + latestRequest.status.slice(1)}</span> : 'No Request'}</span></div>
-                      <div className="sm-detail-row"><strong>Approver</strong><span>{role === 'manager' ? 'HR Head' : departmentManagerName}</span></div>
-                      <div className="sm-detail-row"><strong>Manager Comment</strong><span><i>{latestRequest?.decision_comment || (latestRequest?.status === 'pending' ? 'Awaiting review.' : '—')}</i></span></div>
-                    </div>
-                    <aside className="sm-policy">
-                      <h3>▤ Leave Policy Reminders</h3>
-                      <ul>
-                        <li>Annual leave uses your assigned balance for the year ({displayValue(balance.entitlement)} Days in {currentYear}).</li>
-                        <li>Unpaid leave requires a clear reason and is subject to approval.</li>
-                        <li>Sick leave should be used for health-related absences.</li>
-                      </ul>
-                    </aside>
-                  </div>
-                </section>
+                <aside className="sm-policy" style={{ padding: 10 }}>
+                  <h3>▤ Leave Policy Reminders</h3>
+                  <ul>
+                    <li>Annual leave depends on your assigned entitlement for the selected year.</li>
+                    <li>Unpaid leave requires a reason and approval.</li>
+                    <li>Sick leave may be backdated within the existing policy limit.</li>
+                  </ul>
+                </aside>
               </div>
             </div>
           </div>
