@@ -620,6 +620,7 @@ export default function EmployeeDashboard({
             }
           `}</style>
         )}
+        {!(role === 'manager' && visiblePage === 'approvals') && (
         <div className="ld-page-header">
           <div className="ld-page-title">
             {role !== 'hr' && (
@@ -660,6 +661,7 @@ export default function EmployeeDashboard({
             <span className="ld-year-picker">{currentYear}</span>
           )}
         </div>
+        )}
 
         {authError && (
           <p className="ld-alert error" role="alert">
@@ -776,7 +778,7 @@ export default function EmployeeDashboard({
           role === 'manager' &&
           (
             profile.department_id ? (
-              <section className="ld-panel">
+              <section className="ld-panel" style={{ padding: 0, border: 0, background: "transparent", boxShadow: "none" }}>
                 <ManagerDashboard
                   managerId={userId}
                   departmentId={profile.department_id}
