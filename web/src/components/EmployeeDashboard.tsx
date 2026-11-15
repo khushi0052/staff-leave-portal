@@ -602,7 +602,9 @@ export default function EmployeeDashboard({
               color: #10234f;
               border-radius: 8px;
               padding: 7px 10px;
-              min-width: 92px;
+              min-width: 104px;
+              width: 104px;
+              box-sizing: border-box;
               cursor: pointer;
             }
             .ld-main-hr-compact .ld-year-select:focus-visible {
@@ -614,7 +616,7 @@ export default function EmployeeDashboard({
               .ld-main-hr-compact .ld-page-header { gap: 8px; flex-wrap: wrap; }
               .ld-main-hr-compact .ld-page-title { min-width: 0; }
               .ld-main-hr-compact .ld-page-title h1 { font-size: 20px; }
-              .ld-main-hr-compact .ld-year-select { min-width: 85px; }
+              .ld-main-hr-compact .ld-year-select { min-width: 104px; }
             }
           `}</style>
         )}
@@ -642,7 +644,6 @@ export default function EmployeeDashboard({
 
           {role === 'hr' ? (
             <label className="ld-year-picker" htmlFor="hr-dashboard-year">
-              <span className="sr-only">Dashboard year</span>
               <select
                 id="hr-dashboard-year"
                 className="ld-year-select"
