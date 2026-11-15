@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import ExcelJS from 'exceljs';
 
 type Role = 'staff' | 'manager' | 'hr';
 type LeaveType = 'annual' | 'sick' | 'unpaid';
@@ -73,18 +74,10 @@ function formatDate(date: string): string {
   );
 }
 
-function csvCell(value: unknown): string {
-  let text =
-    value === null || value === undefined
-      ? ''
-      : String(value);
-
-  // Prevent spreadsheet formula injection.
-  if (/^\s*[=+\-@]/.test(text)) {
-    text = `'${text}`;
-  }
-
-  return `"${text.replace(/"/g, '""')}"`;
+// Treat any user-entered text as literal worksheet data.
+// ExcelJS writes these values as strings, never as formulas.
+function excelText(value: string): string {
+  return /^[\s]*[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
 
 function Stat({
@@ -526,75 +519,116 @@ export default function HRDashboard({
     }
   }
 
-  async function exportCsv() {
+  async function exportExcel() {
+    if (busy) return;
+
     setBusy(true);
     setError('');
     setMessage('');
 
     try {
-      const headers = [
-        'Request ID',
-        'Employee',
-        'Email',
-        'Department',
-        'Leave Type',
-        'Start Date',
-        'End Date',
-        'Working Days',
-        'Status',
-        'Reason',
-        'Decided By',
-        'Decision Comment',
-        'Created At',
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'LeaveDesk';
+      workbook.title = 'Employee Leave Records';
+
+      const worksheet = workbook.addWorksheet('Leave Records');
+      worksheet.columns = [
+        { header: 'Employee Name', key: 'employeeName', width: 27 },
+        { header: 'Department', key: 'department', width: 23 },
+        { header: 'Leave Type', key: 'leaveType', width: 18 },
+        { header: 'Start Date', key: 'startDate', width: 18 },
+        { header: 'End Date', key: 'endDate', width: 18 },
+        { header: 'Status', key: 'status', width: 17 },
+        { header: 'Approved By', key: 'approvedBy', width: 27 },
+        { header: 'Total Days of Leave', key: 'totalDays', width: 23 },
       ];
 
-      const rows = requests.map((r) => {
-        const person = peopleById.get(r.user_id);
+      // All records were loaded in pages by loadData(), subject to HR RLS.
+      // Each row represents one request, not one employee.
+      for (const request of requests) {
+        const employee = peopleById.get(request.user_id);
+        const leaveType =
+          request.leave_type === 'annual'
+            ? 'Annual Leave'
+            : request.leave_type === 'sick'
+              ? 'Sick Leave'
+              : 'Unpaid Leave';
 
-        return [
-          r.id,
-          person?.full_name ?? '',
-          person?.email ?? '',
-          departmentName(r.department_id),
-          r.leave_type,
-          r.start_date,
-          r.end_date,
-          r.working_days,
-          r.status,
-          r.reason,
-          personName(r.decided_by),
-          r.decision_comment,
-          r.created_at,
-        ];
-      });
+        const approvedBy =
+          request.status === 'approved' && request.decided_by
+            ? personName(request.decided_by)
+            : '';
 
-      const csv = [
-        headers.map(csvCell).join(','),
-        ...rows.map((row) => row.map(csvCell).join(',')),
-      ].join('\r\n');
+        worksheet.addRow({
+          employeeName: excelText(employee?.full_name ?? 'Unknown'),
+          department: excelText(departmentName(request.department_id)),
+          leaveType,
+          startDate: new Date(`${request.start_date}T00:00:00`),
+          endDate: new Date(`${request.end_date}T00:00:00`),
+          status: request.status.charAt(0).toUpperCase() + request.status.slice(1),
+          approvedBy: excelText(approvedBy),
+          totalDays: request.working_days,
+        });
+      }
 
-      const blob = new Blob(['\uFEFF', csv], {
-        type: 'text/csv;charset=utf-8',
+      const heading = worksheet.getRow(1);
+      heading.height = 30;
+      heading.font = {
+        bold: true,
+        color: { argb: 'FFFFFFFF' },
+      };
+      heading.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0F2A5C' },
+      };
+      heading.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+      };
+
+      for (let index = 2; index <= worksheet.rowCount; index += 1) {
+        const row = worksheet.getRow(index);
+        row.height = 25;
+        row.alignment = { vertical: 'middle' };
+        row.getCell(4).numFmt = 'dd mmm yyyy';
+        row.getCell(5).numFmt = 'dd mmm yyyy';
+        row.getCell(8).numFmt = '0';
+
+        if (index % 2 === 0) {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF0F5FF' },
+          };
+        }
+      }
+
+      worksheet.autoFilter = { from: 'A1', to: 'H1' };
+      worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const bytes = new Uint8Array(buffer);
+      const copiedBuffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(copiedBuffer).set(bytes);
+      const blob = new Blob([copiedBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-
       link.href = url;
-      link.download =
-        `leavedesk-records-${todayKey}.csv`;
-
+      link.download = `LeaveDesk_Leave_Records_${todayKey}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(url);
+      // Release the generated object URL after triggering the download.
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      setMessage(`${requests.length} records exported.`);
+      setMessage(`${requests.length} leave records exported to Excel.`);
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to export records.'
+        err instanceof Error ? err.message : 'Unable to export Excel records.'
       );
     } finally {
       setBusy(false);
@@ -951,7 +985,7 @@ export default function HRDashboard({
                       disabled={busy}
                       onClick={() => onNavigate('hr-reports')}
                     >
-                      Export Leave Records (CSV) ›
+                      Export Leave Records (Excel) ›
                     </button>
                     <button
                       type="button"
@@ -1202,11 +1236,11 @@ export default function HRDashboard({
                 type="button"
                 className="hr-button primary"
                 disabled={busy}
-                onClick={() => void exportCsv()}
+                onClick={() => void exportExcel()}
               >
                 {busy
                   ? 'Preparing records...'
-                  : 'Export Leave Records (CSV)'}
+                  : 'Export Leave Records (Excel)'}
               </button>
 
               <p>
