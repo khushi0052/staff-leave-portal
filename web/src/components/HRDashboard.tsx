@@ -1,10 +1,28 @@
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 type Role = 'staff' | 'manager' | 'hr';
 type LeaveType = 'annual' | 'sick' | 'unpaid';
-type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type Status = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+const LEAVE_STATUSES: Status[] = [
+  'approved',
+  'pending',
+  'rejected',
+  'cancelled',
+];
+
+type HRView =
+  | 'hr'
+  | 'hr-requests'
+  | 'hr-employees'
+  | 'hr-reports';
+
+type Props = {
+  view: HRView;
+  onNavigate: (view: HRView) => void;
+};
 
 type Profile = {
   id: string;
@@ -15,7 +33,12 @@ type Profile = {
   annual_entitlement: number | null;
 };
 
-type LeaveRecord = {
+type Department = {
+  id: string;
+  name: string;
+};
+
+type Request = {
   id: string;
   user_id: string;
   department_id: string;
@@ -24,7 +47,7 @@ type LeaveRecord = {
   end_date: string;
   working_days: number;
   reason: string | null;
-  status: LeaveStatus;
+  status: Status;
   decided_by: string | null;
   decision_comment: string | null;
   created_at: string;
@@ -39,52 +62,116 @@ type Balance = {
   available: number | null;
 };
 
-const RECORD_COLUMNS =
-  'id,user_id,department_id,leave_type,start_date,end_date,working_days,reason,status,decided_by,decision_comment,created_at,updated_at' as const;
-
-function displayDate(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+function formatDate(date: string): string {
+  return new Date(`${date}T00:00:00`).toLocaleDateString(
+    'en-IN',
+    {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }
+  );
 }
 
-// Escape spreadsheet cells and protect against
-// formula injection when the CSV is opened in Excel.
 function csvCell(value: unknown): string {
-  let text = value === null || value === undefined
-    ? ''
-    : String(value);
+  let text =
+    value === null || value === undefined
+      ? ''
+      : String(value);
 
-  if (/^[\s]*[=+\-@]/.test(text)) {
+  // Prevent spreadsheet formula injection.
+  if (/^\s*[=+\-@]/.test(text)) {
     text = `'${text}`;
   }
 
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-export default function HRDashboard() {
-  const [employees, setEmployees] = useState<Profile[]>([]);
-  const [pendingManagerRequests, setPendingManagerRequests] =
-    useState<LeaveRecord[]>([]);
-  const [managerApprovedRecords, setManagerApprovedRecords] =
-    useState<LeaveRecord[]>([]);
+function Stat({
+  label,
+  value,
+  color,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  color: string;
+  icon: string;
+}) {
+  return (
+    <div className={`hr-summary-card ${color}`}>
+      <span className="hr-stat-icon" aria-hidden="true">
+        {icon}
+      </span>
 
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [balances, setBalances] =
-    useState<Record<string, Balance>>({});
-  const [balanceLoading, setBalanceLoading] =
-    useState<string | null>(null);
+      <div>
+        <strong className="hr-summary-value">
+          {value}
+        </strong>
+        <span className="hr-summary-label">
+          {label}
+        </span>
+      </div>
+    </div>
+  );
+}
 
-  const [entitlements, setEntitlements] =
-    useState<Record<string, string>>({});
-  const [reviewComments, setReviewComments] =
-    useState<Record<string, string>>({});
+function Panel({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="hr-card">
+      <header className="hr-panel-heading">
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function Pill({
+  value,
+  kind,
+}: {
+  value: string | number;
+  kind: 'pending' | 'on-leave' | 'yes' | 'no';
+}) {
+  return (
+    <span className={`hr-count ${kind}`}>
+      {value}
+    </span>
+  );
+}
+
+export default function HRDashboard({
+  view,
+  onNavigate,
+}: Props) {
+  const [authorized, setAuthorized] = useState(false);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
+
+  const year = new Date().getFullYear();
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+
+  const [balance, setBalance] = useState<Balance | null>(null);
+  const [entitlementInput, setEntitlementInput] = useState('');
+  const [comments] = useState<Record<string, string>>({});
+
 
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -93,84 +180,83 @@ export default function HRDashboard() {
     setError('');
 
     try {
-      // HR can see only profiles allowed by database RLS.
-      const { data: profileData, error: profileError } =
+      // UI role check only. Database RLS is the real guard.
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Please sign in.');
+
+      const { data: myProfile, error: myError } =
         await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authData.user.id)
+          .single();
+
+      if (myError) throw myError;
+
+      if (myProfile.role !== 'hr') {
+        setAuthorized(false);
+        throw new Error('This page is restricted to HR.');
+      }
+
+      setAuthorized(true);
+
+      const [
+        peopleResult,
+        departmentResult,
+      ] = await Promise.all([
+        supabase
           .from('profiles')
           .select(
             'id, full_name, email, role, department_id, annual_entitlement'
           )
-          .order('full_name');
+          .order('full_name'),
+        supabase
+          .from('departments')
+          .select('id, name')
+          .order('name'),
+      ]);
 
-      if (profileError) throw profileError;
+      if (peopleResult.error) throw peopleResult.error;
+      if (departmentResult.error) throw departmentResult.error;
 
-      const people = (profileData ?? []) as Profile[];
-      setEmployees(people);
+      const people = (peopleResult.data ?? []) as Profile[];
+      const departmentsData =
+        (departmentResult.data ?? []) as Department[];
 
-      setEntitlements(
-        Object.fromEntries(
-          people.map((person) => [
-            person.id,
-            person.annual_entitlement === null
-              ? ''
-              : String(person.annual_entitlement),
-          ])
-        )
-      );
+      // Paginate so the dashboard can read more than
+      // Supabase's default 1,000-row response limit.
+      const records: Request[] = [];
+      const pageSize = 500;
 
-      const managerIds = people
-        .filter((person) => person.role === 'manager')
-        .map((person) => person.id);
-
-      const staffIds = people
-        .filter((person) => person.role === 'staff')
-        .map((person) => person.id);
-
-      // Pending requests made by managers.
-      if (managerIds.length > 0) {
+      for (let offset = 0; ; offset += pageSize) {
         const { data, error: requestError } =
           await supabase
             .from('leave_requests')
-            .select(RECORD_COLUMNS)
-            .eq('status', 'pending')
-            .in('user_id', managerIds)
-            .order('created_at', { ascending: false })
-            .limit(100);
+            .select(
+              'id, user_id, department_id, leave_type, start_date, end_date, working_days, reason, status, decided_by, decision_comment, created_at, updated_at'
+            )
+            .order('id', { ascending: true })
+            .range(offset, offset + pageSize - 1);
 
         if (requestError) throw requestError;
 
-        setPendingManagerRequests(
-          (data ?? []) as LeaveRecord[]
-        );
-      } else {
-        setPendingManagerRequests([]);
+        const page = (data ?? []) as Request[];
+        records.push(...page);
+
+        if (page.length < pageSize) break;
       }
 
-      // Staff requests already approved by managers.
-      if (managerIds.length > 0 && staffIds.length > 0) {
-        const { data, error: approvalError } =
-          await supabase
-            .from('leave_requests')
-            .select(RECORD_COLUMNS)
-            .eq('status', 'approved')
-            .in('decided_by', managerIds)
-            .in('user_id', staffIds)
-            .order('updated_at', { ascending: false })
-            .limit(100);
-
-        if (approvalError) throw approvalError;
-
-        setManagerApprovedRecords(
-          (data ?? []) as LeaveRecord[]
-        );
-      } else {
-        setManagerApprovedRecords([]);
-      }
+      setProfiles(people);
+      setDepartments(departmentsData);
+      setRequests(records);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'Unable to load HR dashboard.'
+          : 'Unable to load HR information.'
       );
     } finally {
       setLoading(false);
@@ -181,50 +267,160 @@ export default function HRDashboard() {
     void loadData();
   }, [loadData]);
 
-  async function loadBalance(userId: string) {
-    setBalanceLoading(userId);
+  const peopleById = useMemo(
+    () => new Map(profiles.map((p) => [p.id, p])),
+    [profiles]
+  );
+
+  const departmentsById = useMemo(
+    () => new Map(departments.map((d) => [d.id, d])),
+    [departments]
+  );
+
+  const today = new Date();
+  const todayKey =
+    `${today.getFullYear()}-` +
+    `${String(today.getMonth() + 1).padStart(2, '0')}-` +
+    String(today.getDate()).padStart(2, '0');
+
+  function personName(id: string | null): string {
+    if (!id) return 'Not assigned';
+    return peopleById.get(id)?.full_name ?? 'Unknown employee';
+  }
+
+  function departmentName(id: string | null): string {
+    if (!id) return 'Unassigned';
+    return departmentsById.get(id)?.name ?? 'Unknown department';
+  }
+
+  function onLeaveToday(userId: string): boolean {
+    return requests.some(
+      (r) =>
+        r.user_id === userId &&
+        r.status === 'approved' &&
+        r.start_date <= todayKey &&
+        r.end_date >= todayKey
+    );
+  }
+
+  function annualApproved(userId: string): number {
+    return requests
+      .filter(
+        (r) =>
+          r.user_id === userId &&
+          r.leave_type === 'annual' &&
+          r.status === 'approved' &&
+          r.start_date >= `${year}-01-01` &&
+          r.end_date <= `${year}-12-31`
+      )
+      .reduce((sum, r) => sum + r.working_days, 0);
+  }
+
+  function remainingBalance(person: Profile): number | null {
+    if (person.annual_entitlement === null) return null;
+
+    return (
+      person.annual_entitlement -
+      annualApproved(person.id)
+    );
+  }
+
+  function averageBalance(people: Profile[]): string {
+    const values = people
+      .map(remainingBalance)
+      .filter((value): value is number => value !== null);
+
+    if (values.length === 0) return '—';
+
+    const average =
+      values.reduce((sum, value) => sum + value, 0) /
+      values.length;
+
+    return `${average.toFixed(1)} Days`;
+  }
+
+  const managers = profiles.filter((p) => p.role === 'manager');
+  const employees = profiles.filter((p) => p.role !== 'hr');
+
+  const pendingStaff = requests.filter(
+    (r) =>
+      r.status === 'pending' &&
+      peopleById.get(r.user_id)?.role === 'staff'
+  );
+
+  const pendingManagers = requests.filter(
+    (r) =>
+      r.status === 'pending' &&
+      peopleById.get(r.user_id)?.role === 'manager'
+  );
+
+  const approvedToday = employees.filter((person) =>
+    onLeaveToday(person.id)
+  ).length;
+
+  const managerIds = new Set(managers.map((p) => p.id));
+
+  const approvedByManagers = requests.filter(
+    (r) =>
+      r.status === 'approved' &&
+      r.decided_by !== null &&
+      managerIds.has(r.decided_by)
+  );
+
+  const selectedEmployee =
+    peopleById.get(selectedUserId) ?? null;
+
+  const filteredEmployees = profiles.filter((person) => {
+    const matchesDepartment =
+      !departmentFilter ||
+      person.department_id === departmentFilter;
+
+    const search = employeeSearch.trim().toLowerCase();
+
+    const matchesSearch =
+      !search ||
+      person.full_name.toLowerCase().includes(search) ||
+      person.email.toLowerCase().includes(search);
+
+    return matchesDepartment && matchesSearch;
+  });
+
+  async function selectEmployee(person: Profile) {
+    setSelectedUserId(person.id);
+    setEntitlementInput(
+      person.annual_entitlement === null
+        ? ''
+        : String(person.annual_entitlement)
+    );
+    setBalance(null);
+    setBalanceLoading(true);
     setError('');
 
     try {
       const { data, error: balanceError } =
         await supabase.rpc('leave_balance', {
-          p_user: userId,
+          p_user: person.id,
           p_year: year,
         });
 
       if (balanceError) throw balanceError;
 
-      const balance = (data as Balance[] | null)?.[0];
-
-      if (!balance) {
-        throw new Error('No balance returned for this employee.');
-      }
-
-      setBalances((previous) => ({
-        ...previous,
-        [userId]: balance,
-      }));
+      setBalance((data as Balance[] | null)?.[0] ?? null);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'Unable to load employee balance.'
+          : 'Unable to load leave balance.'
       );
     } finally {
-      setBalanceLoading(null);
+      setBalanceLoading(false);
     }
   }
 
-  function updateYear(value: number) {
-    if (!Number.isInteger(value)) return;
-    if (value < 2000 || value > 2100) return;
+  async function saveEntitlement() {
+    if (!selectedEmployee) return;
 
-    setYear(value);
-    setBalances({});
-  }
-
-  async function updateEntitlement(person: Profile) {
-    const raw = entitlements[person.id]?.trim() ?? '';
+    const raw = entitlementInput.trim();
     const amount = Number(raw);
 
     if (
@@ -237,47 +433,36 @@ export default function HRDashboard() {
     }
 
     const comment = window.prompt(
-      `Why are you changing ${person.full_name}'s entitlement?`
+      `Reason for changing ${selectedEmployee.full_name}'s entitlement:`
     );
 
     if (comment === null) return;
 
     if (!comment.trim()) {
-      setError('A reason for the HR change is required.');
+      setError('A reason is required.');
       return;
     }
 
-    if (comment.length > 1000) {
-      setError('The comment must be at most 1000 characters.');
-      return;
-    }
-
-    setBusyId(person.id);
+    setBusy(true);
     setError('');
     setMessage('');
 
     try {
       const { error: updateError } =
         await supabase.rpc('set_annual_entitlement', {
-          p_user: person.id,
+          p_user: selectedEmployee.id,
           p_entitlement: amount,
           p_comment: comment.trim(),
         });
 
       if (updateError) throw updateError;
 
-      setMessage(
-        `Entitlement updated for ${person.full_name}.`
-      );
-
-      setBalances((previous) => {
-        const updated = { ...previous };
-        delete updated[person.id];
-        return updated;
-      });
-
+      setMessage('Annual entitlement updated.');
       await loadData();
-      await loadBalance(person.id);
+      await selectEmployee({
+        ...selectedEmployee,
+        annual_entitlement: amount,
+      });
     } catch (err) {
       setError(
         err instanceof Error
@@ -285,15 +470,36 @@ export default function HRDashboard() {
           : 'Unable to update entitlement.'
       );
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   }
 
-  async function reviewManagerRequest(
+  async function reviewRequest(
     requestId: string,
     decision: 'approved' | 'rejected'
   ) {
-    setBusyId(requestId);
+    let comment = comments[requestId]?.trim() ?? '';
+
+    if (decision === 'rejected' && !comment) {
+      const reason = window.prompt(
+        'Enter the reason for rejecting this leave request:'
+      );
+
+      if (reason === null) return;
+      comment = reason.trim();
+
+      if (!comment) {
+        setError('A rejection reason is required.');
+        return;
+      }
+    }
+
+    if (comment.length > 1000) {
+      setError('The decision comment is too long.');
+      return;
+    }
+
+    setBusy(true);
     setError('');
     setMessage('');
 
@@ -302,13 +508,12 @@ export default function HRDashboard() {
         await supabase.rpc('review_leave', {
           p_id: requestId,
           p_decision: decision,
-          p_comment: reviewComments[requestId]?.trim() || null,
+          p_comment: comment || null,
         });
 
       if (reviewError) throw reviewError;
 
-      setMessage(`Manager's request ${decision}.`);
-      setBalances({});
+      setMessage(`Leave request ${decision}.`);
       await loadData();
     } catch (err) {
       setError(
@@ -317,55 +522,21 @@ export default function HRDashboard() {
           : 'Unable to review leave.'
       );
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   }
 
-  function personName(userId: string | null): string {
-    if (!userId) return 'Not assigned';
-
-    return (
-      employees.find((person) => person.id === userId)
-        ?.full_name ?? userId
-    );
-  }
-
-  // Export all leave records accessible to the HR session,
-  // loading them in pages rather than limiting to 100 rows.
-  async function exportRecords() {
-    if (exporting) return;
-
-    setExporting(true);
+  async function exportCsv() {
+    setBusy(true);
     setError('');
     setMessage('');
 
     try {
-      const allRecords: LeaveRecord[] = [];
-      const pageSize = 500;
-
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error: queryError } =
-          await supabase
-            .from('leave_requests')
-            .select(RECORD_COLUMNS)
-            .order('created_at', { ascending: true })
-            .order('id', { ascending: true })
-            .range(offset, offset + pageSize - 1);
-
-        if (queryError) throw queryError;
-
-        const page = (data ?? []) as LeaveRecord[];
-        allRecords.push(...page);
-
-        if (page.length < pageSize) break;
-      }
-
       const headers = [
         'Request ID',
         'Employee',
-        'Employee Email',
-        'Employee Role',
-        'Department ID',
+        'Email',
+        'Department',
         'Leave Type',
         'Start Date',
         'End Date',
@@ -375,30 +546,25 @@ export default function HRDashboard() {
         'Decided By',
         'Decision Comment',
         'Created At',
-        'Updated At',
       ];
 
-      const rows = allRecords.map((record) => {
-        const employee = employees.find(
-          (person) => person.id === record.user_id
-        );
+      const rows = requests.map((r) => {
+        const person = peopleById.get(r.user_id);
 
         return [
-          record.id,
-          employee?.full_name ?? record.user_id,
-          employee?.email ?? '',
-          employee?.role ?? '',
-          record.department_id,
-          record.leave_type,
-          record.start_date,
-          record.end_date,
-          record.working_days,
-          record.status,
-          record.reason,
-          personName(record.decided_by),
-          record.decision_comment,
-          record.created_at,
-          record.updated_at,
+          r.id,
+          person?.full_name ?? '',
+          person?.email ?? '',
+          departmentName(r.department_id),
+          r.leave_type,
+          r.start_date,
+          r.end_date,
+          r.working_days,
+          r.status,
+          r.reason,
+          personName(r.decided_by),
+          r.decision_comment,
+          r.created_at,
         ];
       });
 
@@ -407,344 +573,708 @@ export default function HRDashboard() {
         ...rows.map((row) => row.map(csvCell).join(',')),
       ].join('\r\n');
 
-      // UTF-8 BOM helps Excel open the file correctly.
       const blob = new Blob(['\uFEFF', csv], {
-        type: 'text/csv;charset=utf-8;',
+        type: 'text/csv;charset=utf-8',
       });
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
 
       link.href = url;
-      link.download = `staff-leave-records-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv`;
+      link.download =
+        `leavedesk-records-${todayKey}.csv`;
 
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
 
-      setMessage(
-        `${allRecords.length} leave records exported.`
-      );
+      setMessage(`${requests.length} records exported.`);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'Unable to export leave records.'
+          : 'Unable to export records.'
       );
     } finally {
-      setExporting(false);
+      setBusy(false);
     }
   }
 
-  return (
-    <section className="hr-dashboard">
-      <h2>HR Head Dashboard</h2>
+  if (loading) {
+    return <p>Loading HR dashboard information...</p>;
+  }
 
-      <p className="subtitle">
-        Manage employee entitlements, approvals and records.
+  if (!authorized) {
+    return (
+      <p className="error" role="alert">
+        {error || 'HR access required.'}
       </p>
+    );
+  }
 
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+  return (
+    <div className="hr-leavedesk">
+      <div className="hr-page">
+        {error && (
+          <p className="error" role="alert">{error}</p>
+        )}
 
-      {message && (
-        <p className="success" role="status">
-          {message}
-        </p>
-      )}
+        {message && (
+          <p className="success" role="status">{message}</p>
+        )}
 
-      {loading ? (
-        <p>Loading HR information...</p>
-      ) : (
-        <>
-          {/* EMPLOYEE DIRECTORY */}
-          <section className="hr-section">
-            <h3>Employee Directory</h3>
+        {/* ======================================
+            PAGE 1 — HR HEAD DASHBOARD
+            ====================================== */}
 
-            <label htmlFor="balance-year">
-              Balance year
-            </label>
+        {view === 'hr' && (
+          <>
+            <div className="hr-summary-grid">
+              <Stat
+                icon="♙"
+                label="Total Staff"
+                value={employees.length}
+                color="blue"
+              />
+              <Stat
+                icon="▦"
+                label="Departments"
+                value={departments.length}
+                color="orange"
+              />
+              <Stat
+                icon="◷"
+                label="Pending Staff Requests"
+                value={pendingStaff.length}
+                color="orange"
+              />
+              <Stat
+                icon="♙"
+                label="Pending Dept. Head Requests"
+                value={pendingManagers.length}
+                color="purple"
+              />
+              <Stat
+                icon="✓"
+                label="Approved / On Leave Today"
+                value={approvedToday}
+                color="green"
+              />
+              <Stat
+                icon="▣"
+                label="Avg. Annual Leave Balance"
+                value={averageBalance(employees)}
+                color="lavender"
+              />
+            </div>
 
-            <input
-              id="balance-year"
-              type="number"
-              value={year}
-              min={2000}
-              max={2100}
-              onChange={(event) =>
-                updateYear(Number(event.target.value))
-              }
-            />
-
-            <p className="field-hint">
-              Click an employee's name to see details.
-            </p>
-
-            {employees.map((person) => {
-              const balance = balances[person.id];
-
-              return (
-                <details
-                  className="hr-employee"
-                  key={person.id}
-                  onToggle={(event) => {
-                    if (event.currentTarget.open) {
-                      void loadBalance(person.id);
-                    }
-                  }}
+            <div className="hr-grid">
+              <div className="hr-span-6">
+                <Panel
+                  title="Department Overview"
+                  subtitle="Leave status by department."
                 >
-                  <summary>{person.full_name}</summary>
+                  <div className="hr-table-scroll">
+                    <table className="hr-table">
+                      <thead>
+                        <tr>
+                          <th>Department</th>
+                          <th>Staff</th>
+                          <th>Pending Requests</th>
+                          <th>On Leave Today</th>
+                          <th>Avg. Leave Balance</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {departments.map((dept) => {
+                          const people = employees.filter(
+                            (p) => p.department_id === dept.id
+                          );
 
-                  <div className="hr-employee-details">
-                    <p>Email: {person.email}</p>
-                    <p>Role: {person.role}</p>
+                          const deptPending = pendingStaff.filter(
+                            (r) => r.department_id === dept.id
+                          ).length;
 
-                    <p>
-                      HR-assigned entitlement:{' '}
-                      <strong>
-                        {person.annual_entitlement === null
-                          ? 'Not assigned'
-                          : `${person.annual_entitlement} days`}
-                      </strong>
-                    </p>
+                          const onLeave = people.filter(
+                            (p) => onLeaveToday(p.id)
+                          ).length;
 
-                    <h4>Annual Leave Balance — {year}</h4>
+                          return (
+                            <tr key={dept.id}>
+                              <td data-label="Department">
+                                <strong>{dept.name}</strong>
+                              </td>
+                              <td data-label="Staff">
+                                {people.length}
+                              </td>
+                              <td data-label="Pending Requests">
+                                <Pill
+                                  value={deptPending}
+                                  kind="pending"
+                                />
+                              </td>
+                              <td data-label="On Leave Today">
+                                <Pill
+                                  value={onLeave}
+                                  kind="on-leave"
+                                />
+                              </td>
+                              <td data-label="Avg. Leave Balance">
+                                {averageBalance(people)}
+                              </td>
+                              <td data-label="Action">
+                                <button
+                                  type="button"
+                                  className="hr-button outline"
+                                  onClick={() => {
+                                    setDepartmentFilter(dept.id);
+                                    setSelectedUserId('');
+                                    onNavigate('hr-employees');
+                                  }}
+                                >
+                                  View Department ›
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              </div>
 
-                    {balanceLoading === person.id ? (
-                      <p>Loading balance...</p>
-                    ) : balance ? (
-                      <div className="hr-balance-grid">
-                        <p>
-                          <strong>Approved:</strong>{' '}
-                          {balance.used} days
-                        </p>
+              <div className="hr-span-6">
+                <Panel
+                  title="Department Head Leave Requests"
+                  subtitle="Managers awaiting HR approval."
+                >
+                  {pendingManagers.length === 0 ? (
+                    <p>No pending department head requests.</p>
+                  ) : (
+                    <div className="hr-table-scroll">
+                      <table className="hr-table">
+                        <thead>
+                          <tr>
+                            <th>Requestor</th>
+                            <th>Department</th>
+                            <th>Leave Type</th>
+                            <th>Dates</th>
+                            <th>Days</th>
+                            <th>Status / Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pendingManagers.slice(0, 5).map((r) => (
+                            <tr key={r.id}>
+                              <td data-label="Requestor">
+                                {personName(r.user_id)}
+                              </td>
+                              <td data-label="Department">
+                                {departmentName(r.department_id)}
+                              </td>
+                              <td data-label="Leave Type">
+                                {r.leave_type}
+                              </td>
+                              <td data-label="Dates">
+                                {formatDate(r.start_date)} –{' '}
+                                {formatDate(r.end_date)}
+                              </td>
+                              <td data-label="Days">
+                                {r.working_days}
+                              </td>
+                              <td data-label="Action">
+                                <div className="hr-actions">
+                                  <button
+                                    type="button"
+                                    className="hr-button approve"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void reviewRequest(r.id, 'approved')
+                                    }
+                                  >
+                                    ✓ Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="hr-button reject"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void reviewRequest(r.id, 'rejected')
+                                    }
+                                  >
+                                    × Reject
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Panel>
+              </div>
 
-                        <p>
-                          <strong>Pending:</strong>{' '}
-                          {balance.reserved} days
-                        </p>
+              <div className="hr-span-4">
+                <Panel
+                  title="Company Leave Status"
+                  subtitle="All leave requests visible to HR."
+                >
+                  <table className="hr-table">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>Requests</th>
+                        <th>% of Total</th>
+                      </tr>
+                    </thead>
+                     
+<tbody>
+  {LEAVE_STATUSES.map((status) => {
+    const count = requests.filter(
+      (request) => request.status === status
+    ).length;
 
-                        <p>
-                          <strong>Remaining:</strong>{' '}
-                          {balance.remaining ?? 'Not assigned'}
-                        </p>
+    const percent =
+      requests.length > 0
+        ? Math.round((count / requests.length) * 100)
+        : 0;
 
-                        <p>
-                          <strong>Available:</strong>{' '}
-                          {balance.available ?? 'Not assigned'}
-                        </p>
-                      </div>
-                    ) : (
-                      <p>Balance not loaded.</p>
-                    )}
+    return (
+      <tr key={status}>
+        <td data-label="Status">
+          <span className={`hr-status ${status}`}>
+            {status}
+          </span>
+        </td>
 
-                    <label htmlFor={`entitlement-${person.id}`}>
-                      Update Annual entitlement (days)
-                    </label>
+        <td data-label="Requests">
+          {count}
+        </td>
 
-                    <input
-                      id={`entitlement-${person.id}`}
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={entitlements[person.id] ?? ''}
-                      disabled={busyId !== null}
-                      onChange={(event) =>
-                        setEntitlements((previous) => ({
-                          ...previous,
-                          [person.id]: event.target.value,
-                        }))
-                      }
-                    />
+        <td data-label="% of Total">
+          {percent}%
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
 
+                  </table>
+                </Panel>
+              </div>
+
+              <div className="hr-span-4">
+                <Panel
+                  title="Employee Directory"
+                  subtitle="Search and view employee records."
+                >
+                  <input
+                    className="hr-search"
+                    placeholder="Search employee..."
+                    value={employeeSearch}
+                    onChange={(e) =>
+                      setEmployeeSearch(e.target.value)
+                    }
+                    aria-label="Search employees"
+                  />
+
+                  <div className="hr-table-scroll">
+                    <table className="hr-table">
+                      <thead>
+                        <tr>
+                          <th>Employee</th>
+                          <th>Department</th>
+                          <th>On Leave</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredEmployees
+                          .filter((p) => p.role !== 'hr')
+                          .slice(0, 5)
+                          .map((person) => (
+                            <tr key={person.id}>
+                              <td data-label="Employee">
+                                {person.full_name}
+                              </td>
+                              <td data-label="Department">
+                                {departmentName(person.department_id)}
+                              </td>
+                              <td data-label="On Leave">
+                                <Pill
+                                  kind={
+                                    onLeaveToday(person.id)
+                                      ? 'yes'
+                                      : 'no'
+                                  }
+                                  value={
+                                    onLeaveToday(person.id)
+                                      ? 'Yes'
+                                      : 'No'
+                                  }
+                                />
+                              </td>
+                              <td data-label="Action">
+                                <button
+                                  type="button"
+                                  className="hr-button outline"
+                                  onClick={() => {
+                                    setDepartmentFilter('');
+                                    onNavigate('hr-employees');
+                                    void selectEmployee(person);
+                                  }}
+                                >
+                                  View Record ›
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              </div>
+
+              <div className="hr-span-4">
+                <Panel
+                  title="Quick Actions"
+                  subtitle="Common HR Head tasks."
+                >
+                  <div className="hr-quick-actions">
                     <button
                       type="button"
-                      disabled={
-                        busyId !== null ||
-                        (entitlements[person.id] ?? '') === ''
-                      }
-                      onClick={() =>
-                        void updateEntitlement(person)
-                      }
+                      className="hr-button primary"
+                      disabled={busy}
+                      onClick={() => onNavigate('hr-reports')}
                     >
-                      {busyId === person.id
-                        ? 'Updating...'
-                        : 'Save Entitlement'}
+                      Export Leave Records (CSV) ›
+                    </button>
+                    <button
+                      type="button"
+                      className="hr-button outline"
+                      onClick={() => onNavigate('hr-employees')}
+                    >
+                      Adjust Leave Balances ›
                     </button>
                   </div>
-                </details>
-              );
-            })}
-          </section>
+                </Panel>
+              </div>
+            </div>
+          </>
+        )}
 
-          {/* MANAGER REQUESTS AWAITING HR */}
-          <section className="hr-section">
-            <details>
-              <summary>
-                Pending Manager Leave Requests
-                ({pendingManagerRequests.length})
-              </summary>
+        {/* ======================================
+            PAGE 2 — LEAVE REQUESTS
+            ====================================== */}
 
-              {pendingManagerRequests.length === 0 ? (
-                <p>No manager requests awaiting HR approval.</p>
-              ) : (
-                pendingManagerRequests.map((request) => (
-                  <article
-                    className="request-item"
-                    key={request.id}
-                  >
-                    <h4>{personName(request.user_id)}</h4>
+        {view === 'hr-requests' && (
+          <Panel
+            title="Department Head Leave Requests"
+            subtitle="Review pending manager leave requests."
+          >
+            {pendingManagers.length === 0 ? (
+              <p>No manager leave requests awaiting HR approval.</p>
+            ) : (
+              <div className="hr-table-scroll">
+                <table className="hr-table">
+                  <thead>
+                    <tr>
+                      <th>Requestor</th>
+                      <th>Department</th>
+                      <th>Leave Type</th>
+                      <th>Dates</th>
+                      <th>Days</th>
+                      <th>Status / Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingManagers.map((request) => (
+                      <tr key={request.id}>
+                        <td data-label="Requestor">
+                          {personName(request.user_id)}
+                        </td>
+                        <td data-label="Department">
+                          {departmentName(request.department_id)}
+                        </td>
+                        <td data-label="Leave Type">
+                          {request.leave_type}
+                        </td>
+                        <td data-label="Dates">
+                          {formatDate(request.start_date)} –{' '}
+                          {formatDate(request.end_date)}
+                        </td>
+                        <td data-label="Days">
+                          {request.working_days}
+                        </td>
+                        <td data-label="Action">
+                          <div className="hr-actions">
+                            <button
+                              type="button"
+                              className="hr-button approve"
+                              disabled={busy}
+                              onClick={() =>
+                                void reviewRequest(
+                                  request.id,
+                                  'approved'
+                                )
+                              }
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="hr-button reject"
+                              disabled={busy}
+                              onClick={() =>
+                                void reviewRequest(
+                                  request.id,
+                                  'rejected'
+                                )
+                              }
+                            >
+                              × Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        )}
 
-                    <p>
-                      {request.leave_type.toUpperCase()} Leave
-                    </p>
+        {/* ======================================
+            PAGE 3 — EMPLOYEES
+            ====================================== */}
 
-                    <p>
-                      {displayDate(request.start_date)}
-                      {' — '}
-                      {displayDate(request.end_date)}
-                    </p>
+        {view === 'hr-employees' && (
+          <Panel
+            title="Employee Directory"
+            subtitle="Choose a department and employee to view balances."
+          >
+            <div className="hr-filters">
+              <label>
+                Department
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => {
+                    setDepartmentFilter(e.target.value);
+                    setSelectedUserId('');
+                    setBalance(null);
+                  }}
+                >
+                  <option value="">All departments</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                    <p>{request.working_days} working days</p>
+              <label>
+                Employee search
+                <input
+                  type="search"
+                  value={employeeSearch}
+                  onChange={(e) =>
+                    setEmployeeSearch(e.target.value)
+                  }
+                  placeholder="Name or email"
+                />
+              </label>
+            </div>
 
-                    {request.reason && (
-                      <p>Reason: {request.reason}</p>
-                    )}
+            {departmentFilter && (
+              <p className="hr-manager-name">
+                Department Manager:{' '}
+                <strong>
+                  {profiles
+                    .filter(
+                      (p) =>
+                        p.department_id === departmentFilter &&
+                        p.role === 'manager'
+                    )
+                    .map((p) => p.full_name)
+                    .join(', ') || 'Not assigned'}
+                </strong>
+              </p>
+            )}
 
-                    <label
-                      htmlFor={`hr-comment-${request.id}`}
-                    >
-                      Decision comment
-                    </label>
+            <div className="hr-employee-list">
+              {filteredEmployees.map((person) => (
+                <button
+                  key={person.id}
+                  type="button"
+                  className="hr-employee-button"
+                  onClick={() => void selectEmployee(person)}
+                >
+                  <span>{person.full_name}</span>
+                  <small>
+                    {departmentName(person.department_id)}
+                    {' · '}
+                    {person.role}
+                  </small>
+                  <span aria-hidden="true">›</span>
+                </button>
+              ))}
+            </div>
 
-                    <textarea
-                      id={`hr-comment-${request.id}`}
-                      rows={2}
-                      maxLength={1000}
-                      value={reviewComments[request.id] ?? ''}
-                      disabled={busyId !== null}
-                      onChange={(event) =>
-                        setReviewComments((previous) => ({
-                          ...previous,
-                          [request.id]: event.target.value,
-                        }))
-                      }
+            {selectedEmployee && (
+              <section className="hr-selected-employee">
+                <h3>{selectedEmployee.full_name}</h3>
+                <p>{selectedEmployee.email}</p>
+
+                {balanceLoading ? (
+                  <p>Loading balance...</p>
+                ) : balance ? (
+                  <div className="hr-balance-three">
+                    <Stat
+                      icon="▦"
+                      label="Assigned"
+                      value={balance.entitlement ?? 'Not assigned'}
+                      color="blue"
                     />
+                    <Stat
+                      icon="✓"
+                      label="Approved"
+                      value={balance.used}
+                      color="green"
+                    />
+                    <Stat
+                      icon="◷"
+                      label="Pending"
+                      value={balance.reserved}
+                      color="orange"
+                    />
+                  </div>
+                ) : (
+                  <p>No balance available.</p>
+                )}
 
-                    <div className="request-actions">
-                      <button
-                        type="button"
-                        disabled={busyId !== null}
-                        onClick={() =>
-                          void reviewManagerRequest(
-                            request.id,
-                            'approved'
-                          )
-                        }
-                      >
-                        Approve
-                      </button>
+                <div className="hr-entitlement-editor">
+                  <label htmlFor="hr-entitlement">
+                    Annual entitlement (days)
+                  </label>
 
-                      <button
-                        type="button"
-                        disabled={busyId !== null}
-                        onClick={() =>
-                          void reviewManagerRequest(
-                            request.id,
-                            'rejected'
-                          )
-                        }
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </article>
-                ))
-              )}
-            </details>
-          </section>
+                  <input
+                    id="hr-entitlement"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={entitlementInput}
+                    onChange={(e) =>
+                      setEntitlementInput(e.target.value)
+                    }
+                  />
 
-          {/* MANAGER-APPROVED STAFF RECORDS */}
-          <section className="hr-section">
-            <details>
-              <summary>
-                Staff Leave Approved by Managers
-                ({managerApprovedRecords.length})
-              </summary>
-
-              {managerApprovedRecords.length === 0 ? (
-                <p>No manager-approved staff leave visible.</p>
-              ) : (
-                managerApprovedRecords.map((record) => (
-                  <article
-                    className="request-item"
-                    key={record.id}
+                  <button
+                    type="button"
+                    className="hr-button primary"
+                    disabled={busy}
+                    onClick={() => void saveEntitlement()}
                   >
-                    <h4>{personName(record.user_id)}</h4>
+                    Update Entitlement
+                  </button>
+                </div>
+              </section>
+            )}
+          </Panel>
+        )}
 
-                    <p>Leave type: {record.leave_type}</p>
+        {/* ======================================
+            PAGE 4 — REPORTS
+            ====================================== */}
 
-                    <p>
-                      {displayDate(record.start_date)}
-                      {' — '}
-                      {displayDate(record.end_date)}
-                    </p>
-
-                    <p>
-                      Working days: {record.working_days}
-                    </p>
-
-                    <p>
-                      Approved by:{' '}
-                      <strong>
-                        {personName(record.decided_by)}
-                      </strong>
-                    </p>
-
-                    {record.decision_comment && (
-                      <p>
-                        Decision comment:{' '}
-                        {record.decision_comment}
-                      </p>
-                    )}
-
-                    <span className="request-status status-approved">
-                      Approved
-                    </span>
-                  </article>
-                ))
-              )}
-            </details>
-          </section>
-
-          {/* SPREADSHEET EXPORT */}
-          <section className="hr-section">
-            <h3>Export Leave Records</h3>
-
-            <p>
-              Download all leave records accessible to HR,
-              including employee names, dates, leave types,
-              statuses and approval details.
-            </p>
-
-            <button
-              type="button"
-              disabled={exporting}
-              onClick={() => void exportRecords()}
+        {view === 'hr-reports' && (
+          <>
+            <Panel
+              title="Reports & Export"
+              subtitle="Download all leave records accessible to HR."
             >
-              {exporting
-                ? 'Preparing spreadsheet...'
-                : 'Download Leave Records (CSV)'}
-            </button>
-          </section>
-        </>
-      )}
-    </section>
+              <button
+                type="button"
+                className="hr-button primary"
+                disabled={busy}
+                onClick={() => void exportCsv()}
+              >
+                {busy
+                  ? 'Preparing records...'
+                  : 'Export Leave Records (CSV)'}
+              </button>
+
+              <p>
+                Total records: <strong>{requests.length}</strong>
+              </p>
+            </Panel>
+
+            <div className="hr-report-history">
+              <Panel
+                title="Staff Leave Approved by Managers"
+                subtitle="Approved staff leave and approval details."
+              >
+                {approvedByManagers.length === 0 ? (
+                  <p>No manager-approved staff leave found.</p>
+                ) : (
+                  <div className="hr-table-scroll">
+                    <table className="hr-table">
+                      <thead>
+                        <tr>
+                          <th>Employee</th>
+                          <th>Department</th>
+                          <th>Leave Type</th>
+                          <th>Dates</th>
+                          <th>Days</th>
+                          <th>Approved By</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {approvedByManagers
+                          .slice(0, 100)
+                          .map((r) => (
+                            <tr key={r.id}>
+                              <td data-label="Employee">
+                                {personName(r.user_id)}
+                              </td>
+                              <td data-label="Department">
+                                {departmentName(r.department_id)}
+                              </td>
+                              <td data-label="Leave Type">
+                                {r.leave_type}
+                              </td>
+                              <td data-label="Dates">
+                                {formatDate(r.start_date)} –{' '}
+                                {formatDate(r.end_date)}
+                              </td>
+                              <td data-label="Days">
+                                {r.working_days}
+                              </td>
+                              <td data-label="Approved By">
+                                {personName(r.decided_by)}
+                              </td>
+                              <td data-label="Status">
+                                <span className="hr-status approved">
+                                  ✓ Approved
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Panel>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

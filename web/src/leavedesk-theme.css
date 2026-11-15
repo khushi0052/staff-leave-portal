@@ -1,0 +1,554 @@
+
+/* ==================================================
+   LEAVEDESK — SHARED DESIGN SYSTEM
+   Step 1: Design tokens and reusable CSS classes
+
+   This file contains styling ONLY.
+   No authentication, API calls, or database logic.
+   ================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
+/* --------------------------------------------------
+   1. GLOBAL DESIGN VARIABLES
+   Change these variables to update the entire theme.
+   -------------------------------------------------- */
+
+:root {
+  /* Primary colours */
+  --ld-navy: #102b50;
+  --ld-navy-dark: #0a1d3b;
+  --ld-primary: #17447e;
+  --ld-primary-hover: #103764;
+
+  /* Page colours */
+  --ld-background: #f5f7fc;
+  --ld-surface: #ffffff;
+  --ld-surface-soft: #f8faff;
+
+  /* Text colours */
+  --ld-heading: #132451;
+  --ld-text: #334155;
+  --ld-muted: #64748b;
+
+  /* Borders */
+  --ld-border: #dce4f3;
+
+  /* Status colours — EXACT values from your request */
+  --ld-pending-bg: #fef3c7;
+  --ld-pending-text: #b45309;
+
+  --ld-approved-bg: #dcfce7;
+  --ld-approved-text: #15803d;
+
+  --ld-rejected-bg: #fee2e2;
+  --ld-rejected-text: #b91c1c;
+
+  --ld-cancelled-bg: #f3f4f6;
+  --ld-cancelled-text: #4b5563;
+
+  /* Summary card backgrounds */
+  --ld-card-blue: #eaf3ff;
+  --ld-card-orange: #fff6e8;
+  --ld-card-green: #eaf9ef;
+  --ld-card-purple: #f2edff;
+
+  /* Typography */
+  --ld-font-body: 'Inter', sans-serif;
+  --ld-font-heading: 'Plus Jakarta Sans', sans-serif;
+
+  /* Spacing */
+  --ld-space-1: 4px;
+  --ld-space-2: 8px;
+  --ld-space-3: 12px;
+  --ld-space-4: 16px;
+  --ld-space-5: 20px;
+  --ld-space-6: 24px;
+
+  /* Shape */
+  --ld-radius-sm: 7px;
+  --ld-radius-md: 10px;
+  --ld-radius-lg: 14px;
+
+  /* Shadows */
+  --ld-shadow:
+    0 3px 12px rgba(16, 43, 80, 0.055);
+
+  /* Minimum touch target size */
+  --ld-touch-target: 44px;
+}
+
+/* --------------------------------------------------
+   2. LEAVEDESK ROOT
+   The .leavedesk class scopes styles to the portal.
+   -------------------------------------------------- */
+
+.leavedesk {
+  min-height: 100vh;
+  width: 100%;
+  background: var(--ld-background);
+  color: var(--ld-text);
+  font-family: var(--ld-font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.leavedesk,
+.leavedesk *,
+.leavedesk *::before,
+.leavedesk *::after {
+  box-sizing: border-box;
+}
+
+.leavedesk h1,
+.leavedesk h2,
+.leavedesk h3,
+.leavedesk h4,
+.leavedesk h5,
+.leavedesk h6 {
+  font-family: var(--ld-font-heading);
+  color: var(--ld-heading);
+  line-height: 1.3;
+  letter-spacing: -0.03em;
+}
+
+.leavedesk button,
+.leavedesk input,
+.leavedesk select,
+.leavedesk textarea {
+  font-family: var(--ld-font-body);
+}
+
+/* --------------------------------------------------
+   3. TOP NAVIGATION
+   -------------------------------------------------- */
+
+.leavedesk .ld-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ld-space-5);
+  min-height: 64px;
+  padding: 10px 24px;
+  background: linear-gradient(
+    110deg,
+    var(--ld-navy-dark),
+    var(--ld-navy)
+  );
+  color: #ffffff;
+}
+
+.leavedesk .ld-brand-name {
+  color: #ffffff;
+  font-family: var(--ld-font-heading);
+  font-size: 23px;
+  font-weight: 800;
+}
+
+.leavedesk .ld-nav-link {
+  min-height: var(--ld-touch-target);
+  border: none;
+  border-radius: var(--ld-radius-sm);
+  background: transparent;
+  color: #dbeafe;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.leavedesk .ld-nav-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.leavedesk .ld-nav-link.active,
+.leavedesk .ld-nav-link[aria-current='page'] {
+  background: #315888;
+  color: #ffffff;
+}
+
+/* --------------------------------------------------
+   4. PAGE LAYOUT AND SECTION CARDS
+   -------------------------------------------------- */
+
+.leavedesk .ld-main {
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: var(--ld-space-5) var(--ld-space-6);
+}
+
+.leavedesk .ld-page-header {
+  margin-bottom: var(--ld-space-4);
+}
+
+.leavedesk .ld-page-header h1 {
+  margin: 0 0 4px;
+  font-size: clamp(22px, 2.4vw, 29px);
+  font-weight: 800;
+}
+
+.leavedesk .ld-page-header p {
+  margin: 0;
+  color: var(--ld-muted);
+  font-size: 12px;
+}
+
+.leavedesk .ld-panel {
+  min-width: 0;
+  padding: var(--ld-space-4);
+  border: 1px solid var(--ld-border);
+  border-radius: var(--ld-radius-lg);
+  background: var(--ld-surface);
+  box-shadow: var(--ld-shadow);
+}
+
+.leavedesk .ld-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ld-space-3);
+  margin-bottom: var(--ld-space-3);
+}
+
+.leavedesk .ld-panel-title h2,
+.leavedesk .ld-panel-title h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.leavedesk .ld-panel-title p {
+  margin: 0;
+  color: var(--ld-muted);
+  font-size: 11px;
+}
+
+/* --------------------------------------------------
+   5. RESPONSIVE CONTENT GRID
+   -------------------------------------------------- */
+
+.leavedesk .ld-content-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--ld-space-4);
+  align-items: start;
+}
+
+.leavedesk .ld-col-4 {
+  grid-column: span 4;
+}
+
+.leavedesk .ld-col-6 {
+  grid-column: span 6;
+}
+
+.leavedesk .ld-col-8 {
+  grid-column: span 8;
+}
+
+.leavedesk .ld-col-12 {
+  grid-column: span 12;
+}
+
+/* --------------------------------------------------
+   6. COLOURED SUMMARY CARDS
+   -------------------------------------------------- */
+
+.leavedesk .ld-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--ld-space-3);
+  margin-bottom: var(--ld-space-4);
+}
+
+.leavedesk .ld-stats-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.leavedesk .ld-stats-grid.six {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.leavedesk .ld-stat-card {
+  display: flex;
+  align-items: center;
+  gap: var(--ld-space-3);
+  min-width: 0;
+  min-height: 84px;
+  padding: 14px;
+  border: 1px solid transparent;
+  border-radius: var(--ld-radius-md);
+}
+
+.leavedesk .ld-stat-card.blue {
+  background: var(--ld-card-blue);
+}
+
+.leavedesk .ld-stat-card.orange {
+  background: var(--ld-card-orange);
+}
+
+.leavedesk .ld-stat-card.green {
+  background: var(--ld-card-green);
+}
+
+.leavedesk .ld-stat-card.purple {
+  background: var(--ld-card-purple);
+}
+
+.leavedesk .ld-stat-value {
+  font-family: var(--ld-font-heading);
+  font-size: clamp(19px, 2vw, 26px);
+  font-weight: 800;
+  color: var(--ld-heading);
+}
+
+.leavedesk .ld-stat-label {
+  font-size: 11px;
+  color: var(--ld-text);
+}
+
+/* --------------------------------------------------
+   7. RESPONSIVE TABLE STYLES
+   -------------------------------------------------- */
+
+.leavedesk .ld-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.leavedesk .ld-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.leavedesk .ld-table th {
+  padding: 11px;
+  background: #eef2f9;
+  color: var(--ld-heading);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.leavedesk .ld-table td {
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--ld-border);
+  color: var(--ld-text);
+  font-size: 12px;
+}
+
+.leavedesk .ld-table tbody tr:hover {
+  background: var(--ld-surface-soft);
+}
+
+/* --------------------------------------------------
+   8. STATUS BADGES
+   These classes will be used by ONE StatusBadge
+   React component in Step 2.
+   -------------------------------------------------- */
+
+.leavedesk .ld-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--ld-radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.leavedesk .ld-status.pending {
+  background: var(--ld-pending-bg);
+  color: var(--ld-pending-text);
+}
+
+.leavedesk .ld-status.approved {
+  background: var(--ld-approved-bg);
+  color: var(--ld-approved-text);
+}
+
+.leavedesk .ld-status.rejected {
+  background: var(--ld-rejected-bg);
+  color: var(--ld-rejected-text);
+}
+
+.leavedesk .ld-status.cancelled {
+  background: var(--ld-cancelled-bg);
+  color: var(--ld-cancelled-text);
+}
+
+/* --------------------------------------------------
+   9. BUTTONS
+   All button targets are at least 44px tall.
+   -------------------------------------------------- */
+
+.leavedesk .ld-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  min-height: var(--ld-touch-target);
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--ld-radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.leavedesk .ld-btn-primary {
+  background: var(--ld-navy);
+  color: #ffffff;
+}
+
+.leavedesk .ld-btn-primary:hover:not(:disabled) {
+  background: var(--ld-primary-hover);
+}
+
+.leavedesk .ld-btn-outline {
+  background: #ffffff;
+  border-color: #a9bdd9;
+  color: var(--ld-navy);
+}
+
+.leavedesk .ld-btn-outline:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.leavedesk .ld-btn-danger {
+  background: #ffffff;
+  border-color: #fca5a5;
+  color: var(--ld-rejected-text);
+}
+
+.leavedesk .ld-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------
+   10. FORM CONTROLS
+   -------------------------------------------------- */
+
+.leavedesk .ld-input,
+.leavedesk .ld-select,
+.leavedesk .ld-textarea {
+  width: 100%;
+  min-height: var(--ld-touch-target);
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--ld-radius-sm);
+  background: #ffffff;
+  color: var(--ld-text);
+  font-size: 13px;
+}
+
+.leavedesk .ld-input:focus,
+.leavedesk .ld-select:focus,
+.leavedesk .ld-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* --------------------------------------------------
+   11. MOBILE LAYOUT
+   -------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .leavedesk .ld-stats-grid.six {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .leavedesk .ld-main {
+    padding: 14px;
+  }
+
+  .leavedesk .ld-stats-grid,
+  .leavedesk .ld-stats-grid.three,
+  .leavedesk .ld-stats-grid.six {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leavedesk .ld-col-4,
+  .leavedesk .ld-col-6,
+  .leavedesk .ld-col-8 {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 520px) {
+  .leavedesk .ld-stats-grid,
+  .leavedesk .ld-stats-grid.three,
+  .leavedesk .ld-stats-grid.six {
+    grid-template-columns: 1fr;
+  }
+
+  .leavedesk .ld-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .leavedesk .ld-col-4,
+  .leavedesk .ld-col-6,
+  .leavedesk .ld-col-8,
+  .leavedesk .ld-col-12 {
+    grid-column: 1;
+  }
+
+  /* On phones, table rows become stacked cards.
+     We will add data-label attributes to cells
+     when building the tables in later steps. */
+
+  .leavedesk .ld-table {
+    display: block;
+  }
+
+  .leavedesk .ld-table thead {
+    display: none;
+  }
+
+  .leavedesk .ld-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .leavedesk .ld-table tr {
+    display: block;
+    padding: 12px;
+    border: 1px solid var(--ld-border);
+    border-radius: 10px;
+    background: white;
+  }
+
+  .leavedesk .ld-table td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+  }
+
+  .leavedesk .ld-table td::before {
+    content: attr(data-label);
+    color: var(--ld-muted);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leavedesk .ld-btn {
+    transition: none;
+  }
+}

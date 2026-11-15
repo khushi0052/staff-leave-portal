@@ -1,0 +1,490 @@
+
+/* ============================================
+   STAFF LEAVE PORTAL — PROFESSIONAL THEME
+   Shared by Staff, Manager and HR dashboards
+   ============================================ */
+
+/* Global layout */
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.page {
+  width: 100%;
+  min-height: 100vh;
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(99, 102, 241, 0.08),
+      transparent 35%
+    ),
+    #f5f7ff;
+}
+
+/* Main application card */
+
+.card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 430px;
+  padding: 28px;
+  border-radius: 20px;
+  border: 1px solid #e4e8f3;
+  background: #ffffff;
+  box-shadow: 0 10px 32px rgba(17, 27, 70, 0.06);
+  color: #334155;
+}
+
+/* Wider layout for signed-in users */
+
+.card:has(.leave-form-section),
+.card:has(.my-requests),
+.card:has(.hr-dashboard),
+.card:has(.team-calendar) {
+  max-width: 1160px;
+  padding: 28px;
+  text-align: left;
+}
+
+/* Keep login centered */
+
+.card:not(:has(
+  .leave-form-section,
+  .my-requests,
+  .hr-dashboard,
+  .team-calendar
+)) {
+  margin: auto;
+  text-align: center;
+}
+
+/* Typography */
+
+.card h1,
+.card h2,
+.card h3,
+.card h4 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: #111b46;
+  letter-spacing: -0.035em;
+}
+
+.card h1 {
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 800;
+}
+
+.card h2 {
+  font-size: clamp(19px, 2.2vw, 24px);
+  font-weight: 750;
+}
+
+.card h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.card h4 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.card p {
+  line-height: 1.55;
+}
+
+.subtitle {
+  margin-bottom: 18px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* Welcome area */
+
+.welcome-box {
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  background: linear-gradient(
+    120deg,
+    #f0f2ff,
+    #e9edff
+  );
+  border: 1px solid #dce2ff;
+  border-radius: 14px;
+}
+
+.welcome-box h2 {
+  margin: 0 0 6px;
+  color: #111b46;
+}
+
+.welcome-box p {
+  color: #475569;
+}
+
+/* Shared section spacing */
+
+.leave-form-section,
+.my-requests,
+.team-calendar,
+.hr-dashboard {
+  margin-top: 22px;
+}
+
+.leave-form-section,
+.my-requests {
+  padding-top: 20px;
+  border-top: 1px solid #e5e9f2;
+}
+
+.hr-section {
+  margin: 16px 0;
+  padding: 18px;
+  background: #fafbff;
+  border: 1px solid #e6eaf4;
+  border-radius: 16px;
+}
+
+/* Inputs */
+
+.card input,
+.card select,
+.card textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+  background: #ffffff;
+  color: #111b46;
+  border: 1px solid #d5dbea;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+}
+
+.card input:focus,
+.card select:focus,
+.card textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.card label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+/* Buttons */
+
+.card button {
+  font-family: 'Inter', sans-serif;
+  font-weight: 650;
+  border-radius: 10px;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.card button:focus-visible {
+  outline: 3px solid #a5b4fc;
+  outline-offset: 2px;
+}
+
+/* Primary action colours */
+
+.card form > button:not(:disabled),
+.leave-form-section button:not(:disabled),
+.hr-dashboard button:not(:disabled) {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.card form > button:hover:not(:disabled),
+.leave-form-section button:hover:not(:disabled),
+.hr-dashboard button:hover:not(:disabled) {
+  background: #4338ca;
+}
+
+/* Disabled buttons */
+
+.card button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Leave request history */
+
+.request-item {
+  margin-bottom: 12px;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e5e9f2;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(17, 27, 70, 0.025);
+}
+
+.request-item:hover {
+  border-color: #c7d2fe;
+}
+
+.request-item p {
+  margin: 7px 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.request-item-header {
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.request-item-header h4 {
+  margin: 0;
+}
+
+/* Status badges */
+
+.request-status,
+.calendar-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-approved,
+.calendar-status.approved {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-pending,
+.calendar-status.pending {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.status-rejected {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.status-cancelled {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+/* Request action buttons */
+
+.request-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.request-actions button {
+  width: auto;
+  flex: 1;
+  min-height: 38px;
+  padding: 9px 14px;
+  font-size: 13px;
+}
+
+/* Keep the second manager action visually distinct */
+
+.request-actions button:last-child:not(:disabled) {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.request-actions button:last-child:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+/* HR dropdowns */
+
+.hr-dashboard {
+  max-width: 100%;
+}
+
+.hr-employee {
+  margin: 10px 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.hr-employee:hover {
+  border-color: #a5b4fc;
+}
+
+.hr-employee[open] {
+  border-color: #a5b4fc;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.06);
+}
+
+.hr-employee > summary {
+  min-height: 56px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: #111b46;
+  font-weight: 650;
+}
+
+.hr-employee-details {
+  padding: 18px;
+  background: #ffffff;
+}
+
+.hr-balance-grid {
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+
+.hr-balance-grid p {
+  padding: 14px;
+  background: #f0f2ff;
+  border: 1px solid #e1e5ff;
+  border-radius: 12px;
+}
+
+.hr-section > details > summary {
+  color: #111b46;
+  font-weight: 650;
+}
+
+/* Calendar */
+
+.team-calendar {
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e6eaf4;
+  border-radius: 16px;
+  box-shadow: 0 3px 12px rgba(17, 27, 70, 0.035);
+}
+
+.calendar-header {
+  margin-bottom: 14px;
+}
+
+.calendar-header h2 {
+  font-size: 20px;
+}
+
+.calendar-legend {
+  margin-bottom: 12px;
+}
+
+.calendar-grid {
+  gap: 5px;
+}
+
+.card .calendar-day {
+  min-height: 54px;
+  background: #f8f9ff;
+  border: 1px solid #e6eaf4;
+  border-radius: 9px;
+  color: #334155;
+}
+
+.card .calendar-day:hover:not(:disabled) {
+  background: #edf0ff;
+}
+
+.card .calendar-day.selected {
+  background: #e9eaff;
+  border-color: #6366f1;
+  color: #3730a3;
+}
+
+.approved-dot {
+  background: #16a34a;
+}
+
+.pending-dot {
+  background: #f59e0b;
+}
+
+.calendar-details {
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+/* Notifications */
+
+.success {
+  padding: 12px 14px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+}
+
+.error {
+  padding: 12px 14px;
+  background: #fff1f2;
+  color: #b91c1c;
+  border: 1px solid #fecdd3;
+  border-radius: 10px;
+}
+
+/* Responsive layout */
+
+@media (max-width: 768px) {
+  .page {
+    padding: 14px;
+  }
+
+  .card:has(.leave-form-section),
+  .card:has(.my-requests),
+  .card:has(.hr-dashboard),
+  .card:has(.team-calendar) {
+    padding: 18px;
+  }
+
+  .hr-section,
+  .team-calendar {
+    padding: 14px;
+  }
+
+  .welcome-box {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 10px;
+  }
+
+  .request-actions {
+    flex-direction: column;
+  }
+
+  .calendar-grid {
+    gap: 3px;
+  }
+
+  .card .calendar-day {
+    min-height: 45px;
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card button {
+    transition: none;
+  }
+}

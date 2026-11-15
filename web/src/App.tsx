@@ -2,11 +2,18 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
+
 import { supabase } from './lib/supabase';
 import EmployeeDashboard from './components/EmployeeDashboard';
-import './App.css';
 
-function App() {
+import './App.css';
+import './theme.css';
+import './LeaveDesk.css';
+import './LeaveDesk-responsive.css';
+import './leavedesk-theme.css';
+import './HRLeaveDesk.css';
+
+export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -15,7 +22,6 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Restore the session and listen for authentication changes.
   useEffect(() => {
     let mounted = true;
 
@@ -23,15 +29,16 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (_event, currentSession) => {
-        if (mounted) {
-          setSession(currentSession);
-          setCheckingSession(false);
-        }
+        if (!mounted) return;
+
+        setSession(currentSession);
+        setCheckingSession(false);
       }
     );
 
-    void supabase.auth.getSession().then(
-      ({ data, error: sessionError }) => {
+    void supabase.auth
+      .getSession()
+      .then(({ data, error: sessionError }) => {
         if (!mounted) return;
 
         if (sessionError) {
@@ -40,13 +47,13 @@ function App() {
 
         setSession(data.session);
         setCheckingSession(false);
-      }
-    ).catch(() => {
-      if (mounted) {
-        setError('Unable to restore your session.');
-        setCheckingSession(false);
-      }
-    });
+      })
+      .catch(() => {
+        if (mounted) {
+          setError('Unable to restore your session.');
+          setCheckingSession(false);
+        }
+      });
 
     return () => {
       mounted = false;
@@ -54,8 +61,9 @@ function App() {
     };
   }, []);
 
-  // Sign in with Supabase Authentication.
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
     setError('');
     setLoading(true);
@@ -67,17 +75,18 @@ function App() {
           password,
         });
 
-      if (loginError) {
-        setError(loginError.message);
-      }
-    } catch {
-      setError('Unable to connect to Supabase. Please try again.');
+      if (loginError) throw loginError;
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to sign in.'
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  // Sign out with Supabase Authentication.
   async function handleLogout() {
     setError('');
     setLoading(true);
@@ -86,19 +95,21 @@ function App() {
       const { error: logoutError } =
         await supabase.auth.signOut();
 
-      if (logoutError) {
-        setError(logoutError.message);
-      } else {
-        setPassword('');
-      }
-    } catch {
-      setError('Unable to sign out. Please try again.');
+      if (logoutError) throw logoutError;
+
+      setPassword('');
+      setSession(null);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to sign out.'
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  // Show a loading message while restoring the session.
   if (checkingSession) {
     return (
       <main className="page">
@@ -109,48 +120,32 @@ function App() {
     );
   }
 
-  // Show the dashboard after successful login.
+  // The signed-in application now uses LeaveDesk's
+  // full-width layout instead of the login card.
   if (session) {
     return (
-      <main className="page">
-        <section className="card">
-          <div className="logo">📅</div>
-
-          <h1>Staff Leave Portal</h1>
-
-          <EmployeeDashboard
-            userId={session.user.id}
-            email={session.user.email ?? ''}
-          />
-
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            disabled={loading}
-          >
-            {loading ? 'Signing out...' : 'Log Out'}
-          </button>
-        </section>
-      </main>
+      <EmployeeDashboard
+        userId={session.user.id}
+        email={session.user.email ?? ''}
+        onLogout={handleLogout}
+        loggingOut={loading}
+        authError={error}
+      />
     );
   }
 
-  // Show the login page when no user is signed in.
+  // The login form remains compact.
   return (
     <main className="page">
       <section className="card">
-        <div className="logo">📅</div>
+        <div className="logo" aria-hidden="true">
+          📅
+        </div>
 
-        <h1>Staff Leave Portal</h1>
+        <h1>LeaveDesk</h1>
 
         <p className="subtitle">
-          Sign in to manage your leave requests
+          Staff Leave Management Portal
         </p>
 
         <form onSubmit={handleLogin}>
@@ -162,7 +157,9 @@ function App() {
             id="email"
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) =>
+              setEmail(event.target.value)
+            }
             placeholder="employee@company.com"
             autoComplete="email"
             required
@@ -176,7 +173,9 @@ function App() {
             id="password"
             type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) =>
+              setPassword(event.target.value)
+            }
             placeholder="Enter your password"
             autoComplete="current-password"
             required
@@ -188,10 +187,7 @@ function App() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-          >
+          <button type="submit" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
@@ -203,5 +199,3 @@ function App() {
     </main>
   );
 }
-
-export default App;

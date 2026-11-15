@@ -1,0 +1,641 @@
+
+/* ===================================================
+   LEAVEDESK — HR HEAD DESIGN SYSTEM
+   Styles are scoped to .hr-leavedesk
+   Staff and Manager screens are unaffected.
+   =================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+.hr-leavedesk {
+  /* Navigation and primary actions */
+  --hr-navy: #0f2a5c;
+  --hr-navy-dark: #091d41;
+  --hr-navy-hover: #173b78;
+  --hr-nav-active: #34598b;
+
+  /* Backgrounds */
+  --hr-background: #f5f7fc;
+  --hr-white: #ffffff;
+  --hr-table-header: #edf1f7;
+
+  /* Text */
+  --hr-heading: #10234f;
+  --hr-text: #334155;
+  --hr-muted: #64748b;
+
+  /* Cards */
+  --hr-border: #dce4f3;
+  --hr-radius: 12px;
+  --hr-shadow: 0 3px 14px rgba(15, 42, 92, 0.06);
+
+  /* Summary card colours */
+  --hr-blue-light: #eaf3ff;
+  --hr-orange-light: #fff5e7;
+  --hr-green-light: #eaf9ef;
+  --hr-purple-light: #f2ecff;
+  --hr-lavender-light: #f4f0ff;
+
+  /* Status badges */
+  --hr-pending-bg: #fef3c7;
+  --hr-pending-text: #b45309;
+
+  --hr-approved-bg: #dcfce7;
+  --hr-approved-text: #15803d;
+
+  --hr-rejected-bg: #fee2e2;
+  --hr-rejected-text: #b91c1c;
+
+  --hr-cancelled-bg: #f3f4f6;
+  --hr-cancelled-text: #4b5563;
+
+  /* Fonts */
+  --hr-font-heading: 'Plus Jakarta Sans', sans-serif;
+  --hr-font-body: 'Inter', sans-serif;
+
+  /* Spacing */
+  --hr-gap: 14px;
+  --hr-panel-padding: 16px;
+  --hr-page-padding: 24px;
+
+  /* Accessibility */
+  --hr-touch-height: 44px;
+
+  width: 100%;
+  min-height: 100vh;
+  background: var(--hr-background);
+  color: var(--hr-text);
+  font-family: var(--hr-font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+/* Universal sizing inside HR dashboard */
+
+.hr-leavedesk,
+.hr-leavedesk *,
+.hr-leavedesk *::before,
+.hr-leavedesk *::after {
+  box-sizing: border-box;
+}
+
+/* Typography */
+
+.hr-leavedesk h1,
+.hr-leavedesk h2,
+.hr-leavedesk h3,
+.hr-leavedesk h4 {
+  font-family: var(--hr-font-heading);
+  color: var(--hr-heading);
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+}
+
+.hr-leavedesk h1 {
+  font-size: clamp(22px, 2.5vw, 29px);
+  font-weight: 800;
+}
+
+.hr-leavedesk h2 {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.hr-leavedesk h3 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.hr-leavedesk button,
+.hr-leavedesk input,
+.hr-leavedesk select,
+.hr-leavedesk textarea {
+  font-family: var(--hr-font-body);
+}
+
+/* Page container */
+
+.hr-leavedesk .hr-page {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 20px var(--hr-page-padding);
+}
+
+/* Shared white cards */
+
+.hr-leavedesk .hr-card {
+  min-width: 0;
+  padding: var(--hr-panel-padding);
+  background: var(--hr-white);
+  border: 1px solid var(--hr-border);
+  border-radius: var(--hr-radius);
+  box-shadow: var(--hr-shadow);
+}
+
+/* Responsive card grid */
+
+.hr-leavedesk .hr-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--hr-gap);
+  align-items: start;
+}
+
+.hr-leavedesk .hr-span-4 {
+  grid-column: span 4;
+}
+
+.hr-leavedesk .hr-span-6 {
+  grid-column: span 6;
+}
+
+.hr-leavedesk .hr-span-8 {
+  grid-column: span 8;
+}
+
+.hr-leavedesk .hr-span-12 {
+  grid-column: span 12;
+}
+
+/* Summary cards */
+
+.hr-leavedesk .hr-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.hr-leavedesk .hr-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 88px;
+  padding: 14px;
+  border-radius: var(--hr-radius);
+}
+
+.hr-leavedesk .hr-summary-card.blue {
+  background: var(--hr-blue-light);
+}
+
+.hr-leavedesk .hr-summary-card.orange {
+  background: var(--hr-orange-light);
+}
+
+.hr-leavedesk .hr-summary-card.green {
+  background: var(--hr-green-light);
+}
+
+.hr-leavedesk .hr-summary-card.purple {
+  background: var(--hr-purple-light);
+}
+
+.hr-leavedesk .hr-summary-card.lavender {
+  background: var(--hr-lavender-light);
+}
+
+.hr-leavedesk .hr-summary-value {
+  display: block;
+  font-family: var(--hr-font-heading);
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--hr-heading);
+}
+
+.hr-leavedesk .hr-summary-label {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--hr-text);
+}
+
+/* Status badges */
+
+.hr-leavedesk .hr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hr-leavedesk .hr-status.pending {
+  background: var(--hr-pending-bg);
+  color: var(--hr-pending-text);
+}
+
+.hr-leavedesk .hr-status.approved {
+  background: var(--hr-approved-bg);
+  color: var(--hr-approved-text);
+}
+
+.hr-leavedesk .hr-status.rejected {
+  background: var(--hr-rejected-bg);
+  color: var(--hr-rejected-text);
+}
+
+.hr-leavedesk .hr-status.cancelled,
+.hr-leavedesk .hr-status.no-request {
+  background: var(--hr-cancelled-bg);
+  color: var(--hr-cancelled-text);
+}
+
+/* Small number pills */
+
+.hr-leavedesk .hr-count {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 32px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.hr-leavedesk .hr-count.pending {
+  background: var(--hr-pending-bg);
+  color: var(--hr-pending-text);
+}
+
+.hr-leavedesk .hr-count.on-leave,
+.hr-leavedesk .hr-count.yes {
+  background: var(--hr-approved-bg);
+  color: var(--hr-approved-text);
+}
+
+.hr-leavedesk .hr-count.no {
+  background: var(--hr-cancelled-bg);
+  color: var(--hr-cancelled-text);
+}
+
+/* Tables */
+
+.hr-leavedesk .hr-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.hr-leavedesk .hr-table th {
+  padding: 10px;
+  background: var(--hr-table-header);
+  color: var(--hr-heading);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.hr-leavedesk .hr-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--hr-border);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.hr-leavedesk .hr-table tbody tr {
+  min-height: 44px;
+}
+
+.hr-leavedesk .hr-table tbody tr:hover {
+  background: #f8faff;
+}
+
+/* HR action buttons */
+
+.hr-leavedesk .hr-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: var(--hr-touch-height);
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hr-leavedesk .hr-button.primary,
+.hr-leavedesk .hr-button.approve {
+  background: var(--hr-navy);
+  color: #ffffff;
+}
+
+.hr-leavedesk .hr-button.primary:hover:not(:disabled),
+.hr-leavedesk .hr-button.approve:hover:not(:disabled) {
+  background: var(--hr-navy-hover);
+}
+
+.hr-leavedesk .hr-button.outline,
+.hr-leavedesk .hr-button.reject {
+  background: #ffffff;
+  color: var(--hr-navy);
+  border-color: #a9bdd9;
+}
+
+.hr-leavedesk .hr-button.outline:hover:not(:disabled),
+.hr-leavedesk .hr-button.reject:hover:not(:disabled) {
+  background: #eef4ff;
+}
+
+.hr-leavedesk .hr-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Keyboard accessibility */
+
+.hr-leavedesk button:focus-visible,
+.hr-leavedesk a:focus-visible,
+.hr-leavedesk input:focus-visible,
+.hr-leavedesk select:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+/* Tablet */
+
+@media (max-width: 1100px) {
+  .hr-leavedesk .hr-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Mobile */
+
+@media (max-width: 700px) {
+  .hr-leavedesk .hr-page {
+    padding: 14px;
+  }
+
+  .hr-leavedesk .hr-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hr-leavedesk .hr-span-4,
+  .hr-leavedesk .hr-span-6,
+  .hr-leavedesk .hr-span-8,
+  .hr-leavedesk .hr-span-12 {
+    grid-column: span 12;
+  }
+
+  .hr-leavedesk .hr-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hr-leavedesk .hr-span-4,
+  .hr-leavedesk .hr-span-6,
+  .hr-leavedesk .hr-span-8,
+  .hr-leavedesk .hr-span-12 {
+    grid-column: 1;
+  }
+
+  /* Tables become stacked cards on phones.
+     React table cells will receive data-label
+     attributes when we build them. */
+
+  .hr-leavedesk .hr-table,
+  .hr-leavedesk .hr-table tbody,
+  .hr-leavedesk .hr-table tr {
+    display: block;
+  }
+
+  .hr-leavedesk .hr-table thead {
+    display: none;
+  }
+
+  .hr-leavedesk .hr-table tr {
+    margin-bottom: 12px;
+    padding: 10px;
+    border: 1px solid var(--hr-border);
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  .hr-leavedesk .hr-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .hr-leavedesk .hr-table td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: var(--hr-muted);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hr-leavedesk *,
+  .hr-leavedesk *::before,
+  .hr-leavedesk *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* HR PAGE SECTIONS */
+
+.hr-leavedesk .hr-page {
+  padding: 0;
+}
+
+.hr-leavedesk .hr-grid {
+  margin-top: 14px;
+}
+
+.hr-leavedesk .hr-card {
+  height: 100%;
+  padding: 16px;
+}
+
+.hr-leavedesk .hr-panel-heading {
+  margin-bottom: 14px;
+}
+
+.hr-leavedesk .hr-panel-heading h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.hr-leavedesk .hr-panel-heading p {
+  margin: 0;
+  color: var(--hr-muted);
+  font-size: 12px;
+}
+
+.hr-leavedesk .hr-stat-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--hr-navy);
+  font-size: 24px;
+}
+
+.hr-leavedesk .hr-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.hr-leavedesk .hr-table td {
+  overflow-wrap: anywhere;
+}
+
+.hr-leavedesk .hr-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hr-leavedesk .hr-quick-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.hr-leavedesk .hr-quick-actions .hr-button {
+  width: 100%;
+}
+
+.hr-leavedesk .hr-search {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--hr-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--hr-heading);
+}
+
+.hr-leavedesk .hr-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.hr-leavedesk .hr-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hr-leavedesk .hr-filters input,
+.hr-leavedesk .hr-filters select,
+.hr-leavedesk .hr-entitlement-editor input {
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--hr-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--hr-heading);
+}
+
+.hr-leavedesk .hr-manager-name {
+  padding: 12px;
+  background: #eef4ff;
+  border-radius: 8px;
+}
+
+.hr-leavedesk .hr-employee-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.hr-leavedesk .hr-employee-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px;
+  border: 1px solid var(--hr-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--hr-heading);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hr-leavedesk .hr-employee-button:hover {
+  background: #f2f6ff;
+  border-color: #a9bdd9;
+}
+
+.hr-leavedesk .hr-employee-button small {
+  margin-left: auto;
+  color: var(--hr-muted);
+}
+
+.hr-leavedesk .hr-selected-employee {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hr-border);
+}
+
+.hr-leavedesk .hr-selected-employee h3 {
+  margin-bottom: 4px;
+}
+
+.hr-leavedesk .hr-balance-three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.hr-leavedesk .hr-entitlement-editor {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.hr-leavedesk .hr-entitlement-editor label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hr-leavedesk .hr-entitlement-editor input {
+  width: 130px;
+}
+
+.hr-leavedesk .hr-report-history {
+  margin-top: 16px;
+}
+
+@media (max-width: 700px) {
+  .hr-leavedesk .hr-filters,
+  .hr-leavedesk .hr-employee-list,
+  .hr-leavedesk .hr-balance-three {
+    grid-template-columns: 1fr;
+  }
+
+  .hr-leavedesk .hr-entitlement-editor,
+  .hr-leavedesk .hr-actions {
+    flex-wrap: wrap;
+  }
+
+  .hr-leavedesk .hr-actions .hr-button {
+    flex: 1;
+  }
+}
