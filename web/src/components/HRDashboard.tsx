@@ -23,6 +23,7 @@ type HRView =
 
 type Props = {
   view: HRView;
+  year: number;
   onNavigate: (view: HRView) => void;
 };
 
@@ -146,6 +147,7 @@ function Pill({
 
 export default function HRDashboard({
   view,
+  year,
   onNavigate,
 }: Props) {
   const [authorized, setAuthorized] = useState(false);
@@ -153,7 +155,6 @@ export default function HRDashboard({
   const [departments, setDepartments] = useState<Department[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
 
-  const year = new Date().getFullYear();
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');

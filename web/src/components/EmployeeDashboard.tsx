@@ -234,6 +234,7 @@ export default function EmployeeDashboard({
   const [activePage, setActivePage] = useState<Page | null>(null);
 
   const currentYear = new Date().getFullYear();
+  const [selectedHRYear, setSelectedHRYear] = useState(currentYear);
 
   // ------------------------------------------
   // LOAD PROFILE AND ANNUAL LEAVE BALANCE
@@ -578,15 +579,55 @@ export default function EmployeeDashboard({
           PAGE CONTENT
           ===================================== */}
 
-      <main className="ld-main">
+      <main className={`ld-main${role === 'hr' ? ' ld-main-hr-compact' : ''}`}>
+        {role === 'hr' && (
+          <style>{`
+            .ld-main-hr-compact { padding-top: 12px !important; }
+            .ld-main-hr-compact .ld-page-header {
+              margin-top: 0 !important;
+              margin-bottom: 12px !important;
+              padding-top: 0 !important;
+              padding-bottom: 0 !important;
+              gap: 12px;
+              align-items: center;
+            }
+            .ld-main-hr-compact .ld-page-title { gap: 8px; }
+            .ld-main-hr-compact .ld-page-title h1 { margin: 0; line-height: 1.25; }
+            .ld-main-hr-compact .ld-page-title p { margin: 3px 0 0; }
+            .ld-main-hr-compact .hr-summary-grid { margin-top: 0 !important; }
+            .ld-main-hr-compact .ld-year-select {
+              font: inherit;
+              border: 1px solid #cbd5e1;
+              background: #fff;
+              color: #10234f;
+              border-radius: 8px;
+              padding: 7px 10px;
+              min-width: 92px;
+              cursor: pointer;
+            }
+            .ld-main-hr-compact .ld-year-select:focus-visible {
+              outline: 2px solid #1d4ed8;
+              outline-offset: 2px;
+            }
+            @media (max-width: 640px) {
+              .ld-main-hr-compact { padding-top: 8px !important; }
+              .ld-main-hr-compact .ld-page-header { gap: 8px; flex-wrap: wrap; }
+              .ld-main-hr-compact .ld-page-title { min-width: 0; }
+              .ld-main-hr-compact .ld-page-title h1 { font-size: 20px; }
+              .ld-main-hr-compact .ld-year-select { min-width: 85px; }
+            }
+          `}</style>
+        )}
         <div className="ld-page-header">
           <div className="ld-page-title">
-            <span
-              className="ld-page-avatar"
-              aria-hidden="true"
-            >
-              {profile.full_name.charAt(0).toUpperCase()}
-            </span>
+            {role !== 'hr' && (
+              <span
+                className="ld-page-avatar"
+                aria-hidden="true"
+              >
+                {profile.full_name.charAt(0).toUpperCase()}
+              </span>
+            )}
 
             <div>
               <h1>{role === 'staff' && visiblePage === 'calendar'
@@ -599,9 +640,24 @@ export default function EmployeeDashboard({
             </div>
           </div>
 
-          <span className="ld-year-picker">
-            {currentYear}
-          </span>
+          {role === 'hr' ? (
+            <label className="ld-year-picker" htmlFor="hr-dashboard-year">
+              <span className="sr-only">Dashboard year</span>
+              <select
+                id="hr-dashboard-year"
+                className="ld-year-select"
+                aria-label="Dashboard year"
+                value={selectedHRYear}
+                onChange={(event) => setSelectedHRYear(Number(event.target.value))}
+              >
+                {Array.from({ length: 11 }, (_, index) => currentYear + 1 - index).map(
+                  (year) => <option value={year} key={year}>{year}</option>
+                )}
+              </select>
+            </label>
+          ) : (
+            <span className="ld-year-picker">{currentYear}</span>
+          )}
         </div>
 
         {authError && (
@@ -739,6 +795,8 @@ export default function EmployeeDashboard({
 
         {role === 'hr' && isHRPage(visiblePage) && (
           <HRDashboard
+            key={selectedHRYear}
+            year={selectedHRYear}
             view={visiblePage}
             onNavigate={(page) => setActivePage(page)}
           />
