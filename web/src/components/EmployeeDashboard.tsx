@@ -5,6 +5,7 @@ import LeaveRequestForm from './LeaveRequestForm';
 import MyLeaveRequests from './MyLeaveRequests';
 import ManagerDashboard from './ManagerDashboard';
 import HRDashboard from './HRDashboard';
+import TeamCalendar from './TeamCalendar';
 
 type EmployeeProfile = {
   id: string;
@@ -217,7 +218,12 @@ export default function EmployeeDashboard({
         refreshKey={refreshKey}
         onChanged={refreshDashboard}
       />
-
+      <TeamCalendar
+        userId={userId}
+        role={profile.role as 'staff' | 'manager' | 'hr'}
+        departmentId={profile.department_id}
+        refreshKey={refreshKey}
+      />
       {profile.role === 'manager' && profile.department_id && (
         <ManagerDashboard
           managerId={userId}
