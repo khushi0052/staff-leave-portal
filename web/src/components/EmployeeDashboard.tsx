@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 
 import { supabase } from '../lib/supabase';
@@ -41,6 +40,30 @@ type AnnualLeaveRequest = {
   status: string;
 };
 
+type LatestLeaveRequest = {
+  id: string;
+  leave_type: 'annual' | 'sick' | 'unpaid';
+  start_date: string;
+  end_date: string;
+  working_days: number;
+  status: 'approved' | 'pending' | 'rejected' | 'cancelled';
+  decision_comment: string | null;
+};
+
+function formatLeaveDate(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
+function leaveTypeLabel(type: LatestLeaveRequest['leave_type']): string {
+  if (type === 'annual') return 'Annual Leave';
+  if (type === 'sick') return 'Sick Leave';
+  return 'Unpaid Leave';
+}
+
+
 type LeaveBalance = {
   entitlement: number | null;
   approved: number;
@@ -68,12 +91,17 @@ type NavigationItem = {
 // --------------------------------------------
 
 const staffNavigation: NavigationItem[] = [
-  { id: 'overview', label: 'Dashboard', icon: '⌂' },
-  { id: 'request', label: 'Request Leave', icon: '✚' },
-  { id: 'requests', label: 'My Requests', icon: '▤' },
-  { id: 'calendar', label: 'Team Calendar', icon: '▦' },
+  {
+    id: 'overview',
+    label: 'My Leave',
+    icon: '▦',
+  },
+  {
+    id: 'calendar',
+    label: 'My Leave Calendar',
+    icon: '▦',
+  },
 ];
-
 const managerNavigation: NavigationItem[] = [
   { id: 'approvals', label: 'Department Dashboard', icon: '⌂' },
   { id: 'request', label: 'Request Leave', icon: '✚' },
@@ -185,6 +213,12 @@ export default function EmployeeDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  const [latestRequest, setLatestRequest] =
+    useState<LatestLeaveRequest | null>(null);
+  const [departmentManagerName, setDepartmentManagerName] =
+    useState('Department Manager');
+
 
   // Null means that the user has not selected a tab yet.
   // The starting tab is determined by their role.
@@ -286,6 +320,60 @@ export default function EmployeeDashboard({
     };
   }, [userId, currentYear, refreshKey]);
 
+  // Staff-only read queries. The logged-in user ID filters both queries.
+  // Supabase RLS remains the security boundary.
+  useEffect(() => {
+    if (profile?.role !== 'staff') return;
+
+    let active = true;
+
+    async function loadStaffSummary() {
+      const [countResult, latestResult] = await Promise.all([
+        supabase
+          .from('leave_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'pending'),
+        supabase
+          .from('leave_requests')
+          .select('id, leave_type, start_date, end_date, working_days, status, decision_comment')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1),
+      ]);
+
+      if (!active) return;
+      if (!countResult.error) setPendingRequestCount(countResult.count ?? 0);
+      if (!latestResult.error) {
+        setLatestRequest((latestResult.data?.[0] ?? null) as LatestLeaveRequest | null);
+      }
+    }
+
+    void loadStaffSummary();
+    return () => { active = false; };
+  }, [userId, profile?.role, refreshKey]);
+
+  useEffect(() => {
+    if (profile?.role !== 'staff' || !profile.department_id) return;
+    let active = true;
+
+    async function loadDepartmentManager() {
+      const { data, error: managerError } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('department_id', profile!.department_id!)
+        .eq('role', 'manager')
+        .limit(1);
+
+      if (active && !managerError && data?.[0]?.full_name) {
+        setDepartmentManagerName(data[0].full_name);
+      }
+    }
+
+    void loadDepartmentManager();
+    return () => { active = false; };
+  }, [profile?.role, profile?.department_id]);
+
   function refreshDashboard() {
     setRefreshKey((value) => value + 1);
   }
@@ -360,7 +448,13 @@ export default function EmployeeDashboard({
         ? 'approvals'
         : 'overview';
 
-  const visiblePage: Page = activePage ?? defaultPage;
+  const requestedPage: Page = activePage ?? defaultPage;
+  // Staff can only open My Leave or their personal calendar.
+  // UI visibility is not authorization; Supabase RLS enforces data access.
+  const visiblePage: Page =
+    role === 'staff' && requestedPage !== 'calendar'
+      ? 'overview'
+      : requestedPage;
 
   const displayValue = (value: number | null) =>
     value === null ? '—' : String(value);
@@ -484,8 +578,13 @@ export default function EmployeeDashboard({
             </span>
 
             <div>
-              <h1>{pageTitles[visiblePage]}</h1>
-              <p>{pageDescriptions[visiblePage]}</p>
+              <h1>{role === 'staff' && visiblePage === 'calendar'
+                ? 'My Leave Calendar' : pageTitles[visiblePage]}</h1>
+              <p>{role === 'staff'
+                ? visiblePage === 'calendar'
+                  ? 'View your own approved, pending, rejected and cancelled leave requests.'
+                  : 'Apply for leave, view your balance, and track your request status.'
+                : pageDescriptions[visiblePage]}</p>
             </div>
           </div>
 
@@ -500,9 +599,104 @@ export default function EmployeeDashboard({
           </p>
         )}
 
-        {/* STAFF / MANAGER PERSONAL OVERVIEW */}
+        {/* STAFF MY LEAVE: all sections are visible on one page. */}
+        {role === 'staff' && visiblePage === 'overview' && (
+          <div className="staff-my-leave">
+            <style>{`
+              .staff-my-leave { display: grid; gap: 14px; }
+              .staff-my-leave * { box-sizing: border-box; }
+              .staff-my-leave .sm-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+              .staff-my-leave .sm-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.27fr); gap: 12px; align-items: start; }
+              .staff-my-leave .sm-column { display: grid; gap: 12px; min-width: 0; }
+              .staff-my-leave .sm-panel { border: 1px solid #dce4f3; background: #fff; border-radius: 12px; padding: 14px; min-width: 0; box-shadow: 0 3px 14px rgba(15,42,92,.06); }
+              .staff-my-leave .sm-panel h2 { margin: 0; font-size: 16px; font-weight: 800; color: #10234f; }
+              .staff-my-leave .sm-subtitle { color: #64748b; font-size: 11px; margin: 3px 0 11px; }
+              .staff-my-leave .sm-balance { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 4px; }
+              .staff-my-leave .sm-balance-item { min-width: 0; padding: 10px 4px; text-align: center; border-radius: 8px; background: #f0f5ff; }
+              .staff-my-leave .sm-balance-item.approved { background: #ecfdf3; }
+              .staff-my-leave .sm-balance-item.pending { background: #fff5e7; }
+              .staff-my-leave .sm-balance-item span { min-height: 28px; display: block; color: #10234f; font-size: 10px; line-height: 1.35; font-weight: 600; }
+              .staff-my-leave .sm-balance-item strong { display: block; color: #10234f; margin-top: 7px; font-size: 15px; }
+              .staff-my-leave .sm-balance-item.approved strong { color: #15803d; }
+              .staff-my-leave .sm-balance-item.pending strong { color: #b45309; }
+              .staff-my-leave .sm-detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0,.88fr); gap: 10px; }
+              .staff-my-leave .sm-detail-table { display: grid; gap: 0; border: 1px solid #e4eaf5; border-radius: 8px; overflow: hidden; }
+              .staff-my-leave .sm-detail-row { display: grid; grid-template-columns: 43% 57%; min-height: 39px; border-bottom: 1px solid #e4eaf5; font-size: 11px; }
+              .staff-my-leave .sm-detail-row:last-child { border-bottom: 0; }
+              .staff-my-leave .sm-detail-row strong { background: #f1f5fa; padding: 10px; color: #10234f; }
+              .staff-my-leave .sm-detail-row span { padding: 10px; overflow-wrap: anywhere; }
+              .staff-my-leave .sm-policy { background: #eaf3ff; border-radius: 10px; padding: 12px; }
+              .staff-my-leave .sm-policy h3 { margin: 0 0 7px; color: #10234f; font-size: 13px; }
+              .staff-my-leave .sm-policy ul { margin: 0; padding-left: 18px; font-size: 11px; line-height: 1.55; }
+              .staff-my-leave .sm-policy li + li { margin-top: 7px; }
+              .staff-my-leave .sm-status { display: inline-block; width: fit-content; padding: 4px 8px !important; border-radius: 7px; font-weight: 700; }
+              .staff-my-leave .sm-status.approved { background: #dcfce7; color: #15803d; }
+              .staff-my-leave .sm-status.pending { background: #fef3c7; color: #b45309; }
+              .staff-my-leave .sm-status.rejected { background: #fee2e2; color: #b91c1c; }
+              .staff-my-leave .sm-status.cancelled { background: #f3f4f6; color: #4b5563; }
+              .staff-my-leave .leave-range-form { max-width: 100%; }
+              @media (max-width: 1100px) { .staff-my-leave .sm-stats { grid-template-columns: repeat(2,minmax(0,1fr)); } .staff-my-leave .sm-columns { grid-template-columns: 1fr; } }
+              @media (max-width: 620px) { .staff-my-leave .sm-stats { grid-template-columns: 1fr; } .staff-my-leave .sm-balance { grid-template-columns: repeat(2,minmax(0,1fr)); } .staff-my-leave .sm-detail-layout { grid-template-columns: 1fr; } .staff-my-leave .sm-panel { padding: 11px; } }
+            `}</style>
 
-        {visiblePage === 'overview' && role !== 'hr' && (
+            <div className="sm-stats">
+              <StatCard label="Entitlement" value={`${displayValue(balance.entitlement)} Days`} color="blue" icon="▦" />
+              <StatCard label="Used" value={`${balance.approved} Days`} color="orange" icon="◷" />
+              <StatCard label="Remaining" value={`${displayValue(balance.remaining)} Days`} color="green" icon="✓" />
+              <StatCard label="Pending Request" value={String(pendingRequestCount)} color="purple" icon="♙" />
+            </div>
+
+            <div className="sm-columns">
+              <div className="sm-column">
+                <section className="sm-panel">
+                  <h2>▦ Annual Leave Balance — {currentYear}</h2>
+                  <p className="sm-subtitle">Your annual leave summary for the selected year.</p>
+                  <div className="sm-balance">
+                    <div className="sm-balance-item"><span>Entitlement</span><strong>{displayValue(balance.entitlement)} Days</strong></div>
+                    <div className="sm-balance-item approved"><span>Approved Annual Leave</span><strong>{balance.approved} Days</strong></div>
+                    <div className="sm-balance-item pending"><span>Pending Annual Leave</span><strong>{balance.pending} Days</strong></div>
+                    <div className="sm-balance-item"><span>Remaining Balance</span><strong>{displayValue(balance.remaining)} Days</strong></div>
+                    <div className="sm-balance-item"><span>Available to Request</span><strong>{displayValue(balance.available)} Days</strong></div>
+                  </div>
+                </section>
+                <section className="sm-panel" aria-label="Request Leave">
+                  {requestForm}
+                </section>
+              </div>
+
+              <div className="sm-column">
+                <section className="sm-panel" aria-label="My Leave Requests">
+                  {myRequests}
+                </section>
+                <section className="sm-panel">
+                  <h2>ⓘ Latest Request Status</h2>
+                  <p className="sm-subtitle">Details of your most recent leave request.</p>
+                  <div className="sm-detail-layout">
+                    <div className="sm-detail-table">
+                      <div className="sm-detail-row"><strong>Leave Type</strong><span>{latestRequest ? leaveTypeLabel(latestRequest.leave_type) : 'No Request'}</span></div>
+                      <div className="sm-detail-row"><strong>Dates</strong><span>{latestRequest ? `${formatLeaveDate(latestRequest.start_date)} – ${formatLeaveDate(latestRequest.end_date)} (${latestRequest.working_days} Days)` : '—'}</span></div>
+                      <div className="sm-detail-row"><strong>Status</strong><span>{latestRequest ? <span className={`sm-status ${latestRequest.status}`}>{latestRequest.status.charAt(0).toUpperCase() + latestRequest.status.slice(1)}</span> : 'No Request'}</span></div>
+                      <div className="sm-detail-row"><strong>Approver</strong><span>{departmentManagerName}</span></div>
+                      <div className="sm-detail-row"><strong>Manager Comment</strong><span><i>{latestRequest?.decision_comment || (latestRequest?.status === 'pending' ? 'Awaiting review.' : '—')}</i></span></div>
+                    </div>
+                    <aside className="sm-policy">
+                      <h3>▤ Leave Policy Reminders</h3>
+                      <ul>
+                        <li>Annual leave uses your assigned balance for the year ({displayValue(balance.entitlement)} Days in {currentYear}).</li>
+                        <li>Unpaid leave requires a clear reason and is subject to approval.</li>
+                        <li>Sick leave should be used for health-related absences.</li>
+                      </ul>
+                    </aside>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MANAGER PERSONAL OVERVIEW: unchanged */}
+
+        {visiblePage === 'overview' && role === 'manager' && (
           <>
             <div className="ld-stats-grid three">
               <StatCard
@@ -615,7 +809,7 @@ export default function EmployeeDashboard({
 
         {/* LEAVE REQUEST FORM */}
 
-        {visiblePage === 'request' && role !== 'hr' && (
+        {visiblePage === 'request' && role === 'manager' && (
           <section className="ld-panel">
             {requestForm}
           </section>
@@ -623,7 +817,7 @@ export default function EmployeeDashboard({
 
         {/* MY LEAVE REQUESTS */}
 
-        {visiblePage === 'requests' && role !== 'hr' && (
+        {visiblePage === 'requests' && role === 'manager' && (
           <section className="ld-panel">
             {myRequests}
           </section>
