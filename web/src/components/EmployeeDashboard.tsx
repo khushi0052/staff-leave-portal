@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import LeaveRequestForm from './LeaveRequestForm';
 import MyLeaveRequests from './MyLeaveRequests';
+import ManagerDashboard from './ManagerDashboard';
+import HRDashboard from './HRDashboard';
 
 type EmployeeProfile = {
   id: string;
@@ -208,12 +210,21 @@ export default function EmployeeDashboard({
         </p>
       </div>
 
-<LeaveRequestForm onSuccess={refreshDashboard} />
+      <LeaveRequestForm onSuccess={refreshDashboard} />
 
-<MyLeaveRequests
-  userId={userId}
-  refreshKey={refreshKey}
-/>
+      <MyLeaveRequests
+        userId={userId}
+        refreshKey={refreshKey}
+        onChanged={refreshDashboard}
+      />
+
+      {profile.role === 'manager' && profile.department_id && (
+        <ManagerDashboard
+          managerId={userId}
+          departmentId={profile.department_id}
+        />
+      )}
+{profile.role === 'hr' && <HRDashboard />}
     </section>
   );
 }
