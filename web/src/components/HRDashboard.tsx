@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import ExcelJS from 'exceljs';
+import AddEmployeeForm from './AddEmployeeForm';
 
 type Role = 'staff' | 'manager' | 'hr';
 type LeaveType = 'annual' | 'sick' | 'unpaid';
@@ -167,6 +168,7 @@ export default function HRDashboard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [showAddEmployee, setShowAddEmployee] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -658,6 +660,18 @@ export default function HRDashboard({
           <p className="success" role="status">{message}</p>
         )}
 
+        {view === 'hr' && showAddEmployee && (
+          <AddEmployeeForm
+            departments={departments}
+            onClose={() => setShowAddEmployee(false)}
+            onCreated={async () => {
+              setShowAddEmployee(false);
+              setMessage('Employee account created successfully.');
+              await loadData();
+            }}
+          />
+        )}
+
         {/* ======================================
             PAGE 1 — HR HEAD DASHBOARD
             ====================================== */}
@@ -979,6 +993,13 @@ export default function HRDashboard({
                   subtitle="Common HR Head tasks."
                 >
                   <div className="hr-quick-actions">
+                    <button
+                      type="button"
+                      className="hr-button primary"
+                      onClick={() => setShowAddEmployee(true)}
+                    >
+                      + Add Employee
+                    </button>
                     <button
                       type="button"
                       className="hr-button primary"
