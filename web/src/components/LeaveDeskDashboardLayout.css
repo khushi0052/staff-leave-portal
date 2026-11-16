@@ -540,3 +540,19 @@
   background-color: #f3e8ff !important;
   color: #7e22ce !important;
 }
+/* HR Report Period - consistent 11px font */
+
+.hr-export-range,
+.hr-export-range select,
+.hr-export-range option {
+  font-size: 11px !important;
+}
+
+.hr-export-range {
+  font-weight: 600;
+}
+
+.hr-export-range select {
+  font-weight: 500;
+  width: 100%;
+}
