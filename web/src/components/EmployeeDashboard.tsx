@@ -110,7 +110,6 @@ const hrNavigation: NavigationItem[] = [
   { id: 'hr', label: 'HR Head Dashboard', icon: '⌂' },
   { id: 'hr-requests', label: 'Leave Requests', icon: '▤' },
   { id: 'hr-employees', label: 'Employees', icon: '♙' },
-  { id: 'hr-reports', label: 'Reports', icon: '▥' },
 ];
 
 const pageTitles: Record<Page, string> = {

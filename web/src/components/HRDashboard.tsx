@@ -5,13 +5,6 @@ import { supabase } from '../lib/supabase';
 import ExcelJS from 'exceljs';
 import AddEmployeeForm from './AddEmployeeForm';
 
-const STATUS_COLORS = {
-  approved: '#22c55e',
-  pending: '#fbbf24',
-  rejected: '#f87171',
-  cancelled: '#a855f7',
-  withdrawn: '#3b82f6',
-};
 type Role = 'staff' | 'manager' | 'hr';
 type LeaveType = 'annual' | 'sick' | 'unpaid';
 type Status = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'withdrawn';
@@ -154,6 +147,10 @@ function Pill({
   );
 }
 
+// Reuse HR data between navigation changes, avoiding repeated 5,000-row downloads.
+let hrCache: { timestamp: number; people: Profile[]; departments: Department[]; records: Request[] } | null = null;
+const HR_CACHE_MS = 30_000;
+
 export default function HRDashboard({
   view,
   year,
@@ -166,6 +163,9 @@ export default function HRDashboard({
 
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
+  const [requestName, setRequestName] = useState('');
+  const [reportMonths, setReportMonths] = useState<1 | 3 | 6 | 12>(1);
   const [selectedUserId, setSelectedUserId] = useState('');
 
   const [balance, setBalance] = useState<Balance | null>(null);
@@ -184,8 +184,9 @@ export default function HRDashboard({
   const [requestsStatus, setRequestsStatus] = useState('');
   const [requestsPage, setRequestsPage] = useState(1);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (force = false) => {
+    // Background refresh should not blank out a previously rendered dashboard.
+    if (!hrCache) setLoading(true);
     setError('');
 
     try {
@@ -212,6 +213,15 @@ export default function HRDashboard({
 
       setAuthorized(true);
 
+      // Verify the logged-in HR user before using cached company data.
+      if (!force && hrCache && Date.now() - hrCache.timestamp < HR_CACHE_MS) {
+        setProfiles(hrCache.people);
+        setDepartments(hrCache.departments);
+        setRequests(hrCache.records);
+        setLoading(false);
+        return;
+      }
+
       const [
         peopleResult,
         departmentResult,
@@ -235,29 +245,32 @@ export default function HRDashboard({
       const departmentsData =
         (departmentResult.data ?? []) as Department[];
 
-      // Paginate so the dashboard can read more than
-      // Supabase's default 1,000-row response limit.
-      const records: Request[] = [];
+      // Fetch requests concurrently instead of waiting for 10+ sequential pages.
+      // This reduces first-load latency while keeping Supabase RLS in place.
       const pageSize = 500;
-
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error: requestError } =
-          await supabase
-            .from('leave_requests')
-            .select(
-              'id, user_id, department_id, leave_type, start_date, end_date, working_days, reason, status, decided_by, decision_comment, created_at, updated_at'
-            )
+      const columns = 'id, user_id, department_id, leave_type, start_date, end_date, working_days, reason, status, decided_by, decision_comment, created_at, updated_at';
+      const { count, error: countError } = await supabase
+        .from('leave_requests').select('id', { count: 'exact', head: true });
+      if (countError) throw countError;
+      const pages = Math.ceil((count ?? 0) / pageSize);
+      const results = await Promise.all(
+        Array.from({ length: pages }, (_, index) =>
+          supabase.from('leave_requests').select(columns)
             .order('id', { ascending: true })
-            .range(offset, offset + pageSize - 1);
-
-        if (requestError) throw requestError;
-
-        const page = (data ?? []) as Request[];
-        records.push(...page);
-
-        if (page.length < pageSize) break;
+            .range(index * pageSize, (index + 1) * pageSize - 1)
+        )
+      );
+      const records: Request[] = [];
+      for (const result of results) {
+        if (result.error) throw result.error;
+        records.push(...((result.data ?? []) as Request[]));
       }
-
+      hrCache = {
+        timestamp: Date.now(),
+        people,
+        departments: departmentsData,
+        records,
+      };
       setProfiles(people);
       setDepartments(departmentsData);
       setRequests(records);
@@ -281,7 +294,7 @@ export default function HRDashboard({
     // Also works on focus if Realtime is not enabled on the table.
     const channel = supabase.channel('hr-leave-status-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' },
-        () => { void loadData(); })
+        () => { void loadData(true); })
       .subscribe();
     return () => {
       window.removeEventListener('focus', refreshOnFocus);
@@ -455,6 +468,8 @@ export default function HRDashboard({
     return (
       (!requestsDepartment || request.department_id === requestsDepartment) &&
       (!requestsRole || role === requestsRole) &&
+      (!requestName.trim() || (peopleById.get(request.user_id)?.full_name ?? '')
+        .toLowerCase().includes(requestName.trim().toLowerCase())) &&
       (!requestsStatus || request.status === requestsStatus)
     );
   });
@@ -596,7 +611,7 @@ export default function HRDashboard({
       if (updateError) throw updateError;
 
       setMessage('Annual entitlement updated.');
-      await loadData();
+      await loadData(true);
       await selectEmployee({
         ...selectedEmployee,
         annual_entitlement: amount,
@@ -659,7 +674,7 @@ export default function HRDashboard({
       if (reviewError) throw reviewError;
 
       setMessage(`Leave request ${decision}.`);
-      await loadData();
+      await loadData(true);
     } catch (err) {
       setError(
         err instanceof Error
@@ -695,9 +710,16 @@ export default function HRDashboard({
         { header: 'Total Days of Leave', key: 'totalDays', width: 23 },
       ];
 
-      // All records were loaded in pages by loadData(), subject to HR RLS.
-      // Each row represents one request, not one employee.
-      for (const request of requests) {
+      // Filter by leave START date, inclusive of the cutoff and today.
+      const today = new Date();
+      const cutoff = new Date(today.getFullYear(), today.getMonth() - reportMonths, today.getDate());
+      const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
+      const todayKeyForExport = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const exportRequests = requests.filter((request) =>
+        request.start_date >= cutoffKey && request.start_date <= todayKeyForExport
+      );
+      // Each row is one request; never export more than HR may read.
+      for (const request of exportRequests) {
         const employee = peopleById.get(request.user_id);
         const leaveType =
           request.leave_type === 'annual'
@@ -777,7 +799,7 @@ export default function HRDashboard({
       // Release the generated object URL after triggering the download.
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      setMessage(`${requests.length} leave records exported to Excel.`);
+      setMessage(`${exportRequests.length} leave records exported for the past ${reportMonths} month(s).`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Unable to export Excel records.'
@@ -1010,6 +1032,7 @@ export default function HRDashboard({
                                   title={`View ${dept.name} department`}
                                   onClick={() => {
                                     setDepartmentFilter(dept.id);
+                                    setEmployeePickerOpen(true);
                                     setEmployeeSearch('');
                                     setSelectedUserId('');
                                     setBalance(null);
@@ -1125,29 +1148,10 @@ export default function HRDashboard({
                 >
                   <div className="hr-status-visual">
                     <div
-                    
-style={{
-  background: `conic-gradient(
-    ${STATUS_COLORS.approved} 0%
-      ${statusTotal ? (statusCounts[0] / statusTotal) * 100 : 0}%,
-
-    ${STATUS_COLORS.pending}
-      ${statusTotal ? (statusCounts[0] / statusTotal) * 100 : 0}%
-      ${statusTotal ? ((statusCounts[0] + statusCounts[1]) / statusTotal) * 100 : 0}%,
-
-    ${STATUS_COLORS.rejected}
-      ${statusTotal ? ((statusCounts[0] + statusCounts[1]) / statusTotal) * 100 : 0}%
-      ${statusTotal ? ((statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal) * 100 : 0}%,
-
-    ${STATUS_COLORS.cancelled}
-      ${statusTotal ? ((statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal) * 100 : 0}%
-      ${statusTotal ? ((statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal) * 100 : 0}%,
-
-    ${STATUS_COLORS.withdrawn}
-      ${statusTotal ? ((statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal) * 100 : 0}%
-      100%
-  )`,
-}}
+                      className="hr-status-donut"
+                      style={{
+                        background: `conic-gradient(#38bd60 0% ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}%, #fbbf24 ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}%, #f87171 ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}%, #9a60de ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}%, #94a3b8 ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}% 100%)`
+                      }}
                       aria-label={`${statusTotal} total requests in ${year}`}
                     >
                       <div><strong>{statusTotal.toLocaleString('en-IN')}</strong><span>Requests</span></div>
@@ -1211,18 +1215,27 @@ style={{
                           onCreated={async () => {
                             setShowAddEmployee(false);
                             setMessage('Employee account created successfully.');
-                            await loadData();
+                            await loadData(true);
                           }}
                         />
                       </div>
                     )}
+                    <label className="hr-export-range">
+                      Report period
+                      <select value={reportMonths} onChange={(e) => setReportMonths(Number(e.target.value) as 1 | 3 | 6 | 12)}>
+                        <option value={1}>Last 1 month</option>
+                        <option value={3}>Last 3 months</option>
+                        <option value={6}>Last 6 months</option>
+                        <option value={12}>Last 1 year</option>
+                      </select>
+                    </label>
                     <button
                       type="button"
                       className="hr-button primary"
                       disabled={busy}
-                      onClick={() => onNavigate('hr-reports')}
+                      onClick={() => void exportExcel()}
                     >
-                      Export Leave Records (Excel) ›
+                      {busy ? 'Preparing Excel...' : 'Export Leave Records (Excel)'}
                     </button>
                     <button
                       type="button"
@@ -1264,6 +1277,19 @@ style={{
                     </option>
                   ))}
                 </select>
+              </label>
+              <label>
+                Employee Name
+                <input
+                  type="search"
+                  value={requestName}
+                  onChange={(event) => {
+                    setRequestName(event.target.value);
+                    setRequestsPage(1);
+                  }}
+                  placeholder="Search employee name"
+                  aria-label="Filter leave requests by employee name"
+                />
               </label>
               <label>
                 Employee Role
@@ -1334,7 +1360,7 @@ style={{
         {view === 'hr-employees' && (
           <Panel
             title="Employee Directory"
-            subtitle="Choose a department and employee to view balances."
+            subtitle="Select a department, search for a name, then open the employee balance."
           >
             <div className="hr-filters">
               <label>
@@ -1345,6 +1371,8 @@ style={{
                     setDepartmentFilter(e.target.value);
                     setSelectedUserId('');
                     setBalance(null);
+                    setEmployeeSearch('');
+                    setEmployeePickerOpen(true);
                   }}
                 >
                   <option value="">All departments</option>
@@ -1361,88 +1389,70 @@ style={{
                 <input
                   type="search"
                   value={employeeSearch}
-                  onChange={(e) =>
-                    setEmployeeSearch(e.target.value)
-                  }
+                  onFocus={() => setEmployeePickerOpen(true)}
+                  onChange={(e) => {
+                    setEmployeeSearch(e.target.value);
+                    setEmployeePickerOpen(true);
+                  }}
                   placeholder="Name or email"
                 />
               </label>
             </div>
 
-            {departmentFilter && (
-              <p className="hr-manager-name">
-                Department Manager:{' '}
-                <strong>
-                  {profiles
-                    .filter(
-                      (p) =>
-                        p.department_id === departmentFilter &&
-                        p.role === 'manager'
-                    )
-                    .map((p) => p.full_name)
-                    .join(', ') || 'Not assigned'}
-                </strong>
-              </p>
-            )}
-
-            <div className="hr-employee-list">
-              {filteredEmployees.map((person) => (
-                <button
-                  key={person.id}
-                  type="button"
-                  className="hr-employee-button"
-                  onClick={() => void selectEmployee(person)}
-                >
-                  <span>{person.full_name}</span>
-                  <small>
-                    {departmentName(person.department_id)}
-                    {' · '}
-                    {person.role}
-                  </small>
-                  <span aria-hidden="true">›</span>
-                </button>
-              ))}
+            <div className="hr-employee-picker" style={{ marginTop: 10 }}>
+              <button
+                type="button"
+                className="hr-button outline"
+                aria-expanded={employeePickerOpen}
+                onClick={() => setEmployeePickerOpen((open) => !open)}
+              >
+                {employeePickerOpen ? 'Hide employee names' : 'Choose employee'}
+              </button>
+              {employeePickerOpen && (
+                <div className="hr-employee-options" role="group" aria-label="Matching employees">
+                  {filteredEmployees.length === 0 ? (
+                    <p>No matching employees.</p>
+                  ) : filteredEmployees.slice(0, 30).map((person) => (
+                    <button
+                      key={person.id}
+                      type="button"
+                      className="hr-employee-option"
+                      onClick={() => {
+                        setEmployeeSearch(person.full_name);
+                        setEmployeePickerOpen(false);
+                        void selectEmployee(person);
+                      }}
+                    >
+                      {person.full_name}
+                      <small>{departmentName(person.department_id)}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-
-            {departmentFilter && (
-              <div className="hr-table-scroll" style={{ marginTop: 12 }}>
-                <h3 style={{ margin: '8px 0' }}>
-                  {departmentName(departmentFilter)} — Leave Requests ({year})
-                </h3>
-                {yearCompanyRequests.filter((r) => r.department_id === departmentFilter).length === 0 ? (
-                  <p>No requests for this department in {year}.</p>
-                ) : (
-                  <table className="hr-table">
-                    <thead>
-                      <tr>
-                        <th>Employee</th><th>Role</th><th>Type</th><th>Dates</th>
-                        <th>Days</th><th>Status</th><th>Approved By</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {yearCompanyRequests
-                        .filter((r) => r.department_id === departmentFilter)
-                        .sort((a, b) => b.start_date.localeCompare(a.start_date))
-                        .map((r) => (
-                          <tr key={r.id}>
-                            <td data-label="Employee">{personName(r.user_id)}</td>
-                            <td data-label="Role">{peopleById.get(r.user_id)?.role}</td>
-                            <td data-label="Type">{leaveTypeLabel(r.leave_type)}</td>
-                            <td data-label="Dates">{formatDate(r.start_date)} – {formatDate(r.end_date)}</td>
-                            <td data-label="Days">{r.working_days}</td>
-                            <td data-label="Status">
-                              <span className={`hr-status ${r.status}`}>{r.status}</span>
-                            </td>
-                            <td data-label="Approved By">
-                              {r.decided_by ? personName(r.decided_by) : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
+            <div className="hr-employee-add" style={{ marginTop: 14 }}>
+              <button
+                type="button"
+                className="hr-button primary"
+                aria-expanded={showAddEmployee}
+                onClick={() => setShowAddEmployee((open) => !open)}
+              >
+                {showAddEmployee ? '− Close Add Employee' : '+ Add Employee'}
+              </button>
+              {showAddEmployee && (
+                <div className="hr-employee-add-form">
+                  <AddEmployeeForm
+                    departments={departments}
+                    onClose={() => setShowAddEmployee(false)}
+                    onCreated={async () => {
+                      setShowAddEmployee(false);
+                      setMessage('Employee account created successfully.');
+                      await loadData(true);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
 
             {selectedEmployee && (
               <section className="hr-selected-employee">
@@ -1485,40 +1495,6 @@ style={{
                   <p>No balance available.</p>
                 )}
 
-                <div className="hr-table-scroll" style={{ marginTop: 12 }}>
-                  <h4 style={{ margin: '8px 0' }}>Leave Requests &amp; Approvals ({year})</h4>
-                  {yearRequests.filter((r) => r.user_id === selectedEmployee.id).length === 0 ? (
-                    <p>No leave requests for the selected year.</p>
-                  ) : (
-                    <table className="hr-table">
-                      <thead>
-                        <tr>
-                          <th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Decision by</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {yearRequests
-                          .filter((r) => r.user_id === selectedEmployee.id)
-                          .sort((a, b) => b.start_date.localeCompare(a.start_date))
-                          .map((r) => (
-                            <tr key={r.id}>
-                              <td data-label="Type">{leaveTypeLabel(r.leave_type)}</td>
-                              <td data-label="Dates">{formatDate(r.start_date)} – {formatDate(r.end_date)}</td>
-                              <td data-label="Days">{r.working_days}</td>
-                              <td data-label="Status">
-                                <span className={`hr-status ${r.status}`}>{r.status}</span>
-                              </td>
-                              <td data-label="Decision by">
-                                {r.decided_by ? personName(r.decided_by) : 'Awaiting decision'}
-                                {r.decision_comment ? ` · ${r.decision_comment}` : ''}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-
                 <div className="hr-entitlement-editor">
                   <label htmlFor="hr-entitlement">
                     Annual entitlement (days)
@@ -1559,6 +1535,13 @@ style={{
               title="Reports & Export"
               subtitle="Download all leave records accessible to HR."
             >
+              <label className="hr-export-range">
+                Report period
+                <select value={reportMonths} onChange={(e) => setReportMonths(Number(e.target.value) as 1 | 3 | 6 | 12)}>
+                  <option value={1}>Last 1 month</option><option value={3}>Last 3 months</option>
+                  <option value={6}>Last 6 months</option><option value={12}>Last 1 year</option>
+                </select>
+              </label>
               <button
                 type="button"
                 className="hr-button primary"
@@ -1571,7 +1554,7 @@ style={{
               </button>
 
               <p>
-                Total records: <strong>{requests.length}</strong>
+                Total records available to HR: <strong>{requests.length}</strong>
               </p>
             </Panel>
 
