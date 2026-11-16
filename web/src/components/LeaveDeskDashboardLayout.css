@@ -319,3 +319,29 @@
   .hr-overview-desktop.hr-add-open .hr-grid { grid-template-rows: auto; }
   .hr-overview-desktop #hr-add-employee-form { max-height: none !important; overflow-y: visible !important; }
 }
+/* Company Leave Status — five status colours */
+
+.hr-status.approved {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.hr-status.pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.hr-status.rejected {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.hr-status.cancelled {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.hr-status.withdrawn {
+  background: #dbeafe;
+  color: #1d4ed8;
+}

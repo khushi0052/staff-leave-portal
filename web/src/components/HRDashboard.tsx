@@ -5,6 +5,13 @@ import { supabase } from '../lib/supabase';
 import ExcelJS from 'exceljs';
 import AddEmployeeForm from './AddEmployeeForm';
 
+const STATUS_COLORS = {
+  approved: '#22c55e',
+  pending: '#fbbf24',
+  rejected: '#f87171',
+  cancelled: '#a855f7',
+  withdrawn: '#3b82f6',
+};
 type Role = 'staff' | 'manager' | 'hr';
 type LeaveType = 'annual' | 'sick' | 'unpaid';
 type Status = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'withdrawn';
@@ -1118,10 +1125,29 @@ export default function HRDashboard({
                 >
                   <div className="hr-status-visual">
                     <div
-                      className="hr-status-donut"
-                      style={{
-                        background: `conic-gradient(#38bd60 0% ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}%, #fbbf24 ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}%, #f87171 ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}%, #9a60de ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}%, #94a3b8 ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}% 100%)`
-                      }}
+                    
+style={{
+  background: `conic-gradient(
+    ${STATUS_COLORS.approved} 0%
+      ${statusTotal ? (statusCounts[0] / statusTotal) * 100 : 0}%,
+
+    ${STATUS_COLORS.pending}
+      ${statusTotal ? (statusCounts[0] / statusTotal) * 100 : 0}%
+      ${statusTotal ? ((statusCounts[0] + statusCounts[1]) / statusTotal) * 100 : 0}%,
+
+    ${STATUS_COLORS.rejected}
+      ${statusTotal ? ((statusCounts[0] + statusCounts[1]) / statusTotal) * 100 : 0}%
+      ${statusTotal ? ((statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal) * 100 : 0}%,
+
+    ${STATUS_COLORS.cancelled}
+      ${statusTotal ? ((statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal) * 100 : 0}%
+      ${statusTotal ? ((statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal) * 100 : 0}%,
+
+    ${STATUS_COLORS.withdrawn}
+      ${statusTotal ? ((statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal) * 100 : 0}%
+      100%
+  )`,
+}}
                       aria-label={`${statusTotal} total requests in ${year}`}
                     >
                       <div><strong>{statusTotal.toLocaleString('en-IN')}</strong><span>Requests</span></div>
