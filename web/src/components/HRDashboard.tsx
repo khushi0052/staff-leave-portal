@@ -182,6 +182,8 @@ export default function HRDashboard({
   const [requestsDepartment, setRequestsDepartment] = useState('');
   const [requestsRole, setRequestsRole] = useState('');
   const [requestsStatus, setRequestsStatus] = useState('');
+  const [requestsFromDate, setRequestsFromDate] = useState('');
+  const [requestsToDate, setRequestsToDate] = useState('');
   const [requestsPage, setRequestsPage] = useState(1);
 
   const loadData = useCallback(async (force = false) => {
@@ -471,7 +473,10 @@ export default function HRDashboard({
       (!requestsRole || role === requestsRole) &&
       (!requestName.trim() || (peopleById.get(request.user_id)?.full_name ?? '')
         .toLowerCase().includes(requestName.trim().toLowerCase())) &&
-      (!requestsStatus || request.status === requestsStatus)
+      (!requestsStatus || request.status === requestsStatus) &&
+      // Inclusive date-range filter: show requests overlapping the selected dates.
+      (!requestsFromDate || request.end_date >= requestsFromDate) &&
+      (!requestsToDate || request.start_date <= requestsToDate)
     );
   });
 
@@ -1014,22 +1019,24 @@ export default function HRDashboard({
                             (p) => onLeaveToday(p.id)
                           ).length;
 
-                          // Count approved requests overlapping the current
-                          // calendar month (including Manager leave).
+                          // Count unique Staff members with approved leave
+                          // overlapping the current calendar month. Each person
+                          // counts once even if they have multiple applications.
                           const monthStart = `${todayKey.slice(0, 7)}-01`;
                           const nextMonthStart = new Date(
                             Date.UTC(today.getFullYear(), today.getMonth() + 1, 1)
                           ).toISOString().slice(0, 10);
-                          const approvedThisMonth = requests.filter((request) => {
-                            const role = peopleById.get(request.user_id)?.role;
-                            return (
-                              request.department_id === dept.id &&
-                              request.status === 'approved' &&
-                              (role === 'staff' || role === 'manager') &&
-                              request.start_date < nextMonthStart &&
-                              request.end_date >= monthStart
-                            );
-                          }).length;
+                          const approvedThisMonth = new Set(
+                            requests
+                              .filter((request) =>
+                                request.department_id === dept.id &&
+                                request.status === 'approved' &&
+                                peopleById.get(request.user_id)?.role === 'staff' &&
+                                request.start_date < nextMonthStart &&
+                                request.end_date >= monthStart
+                              )
+                              .map((request) => request.user_id)
+                          ).size;
 
                           return (
                             <tr key={dept.id}>
@@ -1344,6 +1351,30 @@ export default function HRDashboard({
                     </option>
                   ))}
                 </select>
+              </label>
+              <label>
+                From Date
+                <input
+                  type="date"
+                  value={requestsFromDate}
+                  max={requestsToDate || undefined}
+                  onChange={(event) => {
+                    setRequestsFromDate(event.target.value);
+                    setRequestsPage(1);
+                  }}
+                />
+              </label>
+              <label>
+                To Date
+                <input
+                  type="date"
+                  value={requestsToDate}
+                  min={requestsFromDate || undefined}
+                  onChange={(event) => {
+                    setRequestsToDate(event.target.value);
+                    setRequestsPage(1);
+                  }}
+                />
               </label>
             </div>
             <p>
