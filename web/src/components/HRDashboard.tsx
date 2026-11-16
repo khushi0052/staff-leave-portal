@@ -1523,9 +1523,49 @@ export default function HRDashboard({
               )}
             </div>
 
-            {selectedEmployee && (
-              <section className="hr-selected-employee">
-                <h3>{selectedEmployee.full_name}</h3>
+            
+{selectedEmployee && (
+  <section className="hr-selected-employee">
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 8,
+      }}
+    >
+      <h3 style={{ margin: 0 }}>
+        {selectedEmployee.full_name}
+      </h3>
+
+      <button
+        type="button"
+        aria-label={`Close ${selectedEmployee.full_name}'s details`}
+        title="Close employee details"
+        onClick={() => {
+          setSelectedUserId('');
+          setBalance(null);
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 32,
+          height: 32,
+          flexShrink: 0,
+          border: '1px solid #d7e2f2',
+          borderRadius: 8,
+          background: '#ffffff',
+          color: '#102b60',
+          fontSize: 20,
+          cursor: 'pointer',
+        }}
+      >
+        ×
+      </button>
+    </div>
+
                 <p>
                   {selectedEmployee.email} · {departmentName(selectedEmployee.department_id)}
                   {' · '}{selectedEmployee.role === 'manager' ? 'Manager' : selectedEmployee.role === 'staff' ? 'Staff' : 'HR'}
