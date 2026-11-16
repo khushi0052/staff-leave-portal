@@ -165,7 +165,6 @@ export default function HRDashboard({
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [requestName, setRequestName] = useState('');
-  const [reportMonths, setReportMonths] = useState<1 | 3 | 6 | 12>(1);
   const [selectedUserId, setSelectedUserId] = useState('');
 
   const [balance, setBalance] = useState<Balance | null>(null);
@@ -692,91 +691,208 @@ export default function HRDashboard({
     }
   }
 
-  async function exportExcel() {
-    if (busy) return;
+ 
+async function exportExcel() {
+  if (busy) return;
 
-    setBusy(true);
-    setError('');
-    setMessage('');
+  setBusy(true);
+  setError('');
+  setMessage('');
 
-    try {
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'LeaveDesk';
-      workbook.title = 'Employee Leave Records';
+  try {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'LeaveDesk';
+    workbook.title = 'Employee Leave Report';
 
-      const worksheet = workbook.addWorksheet('Leave Records');
-      worksheet.columns = [
-        { header: 'Employee Name', key: 'employeeName', width: 27 },
-        { header: 'Department', key: 'department', width: 23 },
-        { header: 'Leave Type', key: 'leaveType', width: 18 },
-        { header: 'Start Date', key: 'startDate', width: 18 },
-        { header: 'End Date', key: 'endDate', width: 18 },
-        { header: 'Status', key: 'status', width: 17 },
-        { header: 'Approved By', key: 'approvedBy', width: 27 },
-        { header: 'Total Days of Leave', key: 'totalDays', width: 23 },
-      ];
+    const worksheet = workbook.addWorksheet('Leave Report');
 
-      // Filter by leave START date, inclusive of the cutoff and today.
-      const today = new Date();
-      const cutoff = new Date(today.getFullYear(), today.getMonth() - reportMonths, today.getDate());
-      const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
-      const todayKeyForExport = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      const exportRequests = requests.filter((request) =>
-        request.start_date >= cutoffKey && request.start_date <= todayKeyForExport
-      );
-      // Each row is one request; never export more than HR may read.
-      for (const request of exportRequests) {
-        const employee = peopleById.get(request.user_id);
-        const leaveType =
-          request.leave_type === 'annual'
-            ? 'Annual Leave'
-            : request.leave_type === 'sick'
-              ? 'Sick Leave'
-              : 'Unpaid Leave';
+    // Compact column widths for printing.
+    // Only columns A to H are used.
+    worksheet.columns = [
+      { key: 'employeeName', width: 19 },
+      { key: 'department', width: 17 },
+      { key: 'leaveType', width: 15 },
+      { key: 'startDate', width: 15 },
+      { key: 'endDate', width: 15 },
+      { key: 'status', width: 13 },
+      { key: 'approvedBy', width: 19 },
+      { key: 'totalDays', width: 12 },
+    ];
 
-        const approvedBy =
-          request.status === 'approved' && request.decided_by
-            ? personName(request.decided_by)
-            : '';
+    // Export exactly what the Leave Requests page filters match,
+    // including ALL pages of results (not just the 25 visible rows).
+    // Date matching is inclusive and includes overlapping leave periods.
+    if (requestsFromDate && requestsToDate && requestsFromDate > requestsToDate) {
+      throw new Error('To Date cannot be earlier than From Date.');
+    }
 
-        worksheet.addRow({
-          employeeName: excelText(employee?.full_name ?? 'Unknown'),
-          department: excelText(departmentName(request.department_id)),
-          leaveType,
-          startDate: new Date(`${request.start_date}T00:00:00`),
-          endDate: new Date(`${request.end_date}T00:00:00`),
-          status: request.status.charAt(0).toUpperCase() + request.status.slice(1),
-          approvedBy: excelText(approvedBy),
-          totalDays: request.working_days,
-        });
-      }
+    const fromDate = requestsFromDate;
+    const toDate = requestsToDate;
+    const periodLabel = fromDate || toDate
+      ? `${fromDate ? formatDate(fromDate) : 'Beginning'} to ${toDate ? formatDate(toDate) : 'Today'}`
+      : 'All Dates';
 
-      const heading = worksheet.getRow(1);
-      heading.height = 30;
-      heading.font = {
+    const exportRequests = [...filteredCompanyRequests].sort((a, b) =>
+      b.start_date.localeCompare(a.start_date) || b.id.localeCompare(a.id)
+    );
+
+    const filterDescription = [
+      requestsDepartment ? `Department: ${departmentName(requestsDepartment)}` : null,
+      requestName.trim() ? `Employee: ${requestName.trim()}` : null,
+      requestsRole ? `Role: ${requestsRole}` : null,
+      requestsStatus ? `Status: ${requestsStatus}` : null,
+    ].filter((value): value is string => Boolean(value)).join(' | ');
+
+    // -------------------------------------------------
+    // ROW 1 — REPORT TITLE
+    // -------------------------------------------------
+
+    worksheet.mergeCells('A1:H1');
+
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = `Leave Report: ${periodLabel}`;
+    titleCell.font = {
+      name: 'Calibri',
+      size: 16,
+      bold: true,
+      color: { argb: 'FFFFFFFF' },
+    };
+    titleCell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    };
+
+    worksheet.getRow(1).height = 34;
+
+    // Apply blue only within A1:H1.
+    for (let column = 1; column <= 8; column++) {
+      worksheet.getRow(1).getCell(column).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF102B60' },
+      };
+    }
+
+    // -------------------------------------------------
+    // ROW 2 — DATE RANGE
+    // -------------------------------------------------
+
+    worksheet.mergeCells('A2:H2');
+
+    const dateCell = worksheet.getCell('A2');
+
+    dateCell.value = filterDescription
+      ? `${periodLabel} | ${exportRequests.length} Requests | ${filterDescription}`
+      : `${periodLabel} | ${exportRequests.length} Requests`;
+
+    dateCell.font = {
+      name: 'Calibri',
+      size: 10,
+      color: { argb: 'FF475569' },
+    };
+
+    dateCell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true,
+    };
+
+    worksheet.getRow(2).height = filterDescription ? 34 : 24;
+
+    // -------------------------------------------------
+    // ROW 3 — COLUMN HEADINGS
+    // -------------------------------------------------
+
+    const headerRow = worksheet.getRow(3);
+
+    headerRow.values = [
+      'Employee Name',
+      'Department',
+      'Leave Type',
+      'Start Date',
+      'End Date',
+      'Status',
+      'Approved By',
+      'Total Days',
+    ];
+
+    headerRow.height = 32;
+
+    for (let column = 1; column <= 8; column++) {
+      const cell = headerRow.getCell(column);
+
+      cell.font = {
+        name: 'Calibri',
+        size: 9,
         bold: true,
         color: { argb: 'FFFFFFFF' },
       };
-      heading.fill = {
+
+      cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF0F2A5C' },
+        fgColor: { argb: 'FF102B60' },
       };
-      heading.alignment = {
-        vertical: 'middle',
+
+      cell.alignment = {
         horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true,
       };
+    }
 
-      for (let index = 2; index <= worksheet.rowCount; index += 1) {
-        const row = worksheet.getRow(index);
-        row.height = 25;
-        row.alignment = { vertical: 'middle' };
-        row.getCell(4).numFmt = 'dd mmm yyyy';
-        row.getCell(5).numFmt = 'dd mmm yyyy';
-        row.getCell(8).numFmt = '0';
+    // -------------------------------------------------
+    // ROW 4 ONWARD — LEAVE RECORDS
+    // -------------------------------------------------
 
-        if (index % 2 === 0) {
-          row.fill = {
+    for (const request of exportRequests) {
+      const employee = peopleById.get(request.user_id);
+
+      const leaveType =
+        request.leave_type === 'annual'
+          ? 'Annual Leave'
+          : request.leave_type === 'sick'
+            ? 'Sick Leave'
+            : 'Unpaid Leave';
+
+      const approvedBy =
+        request.status === 'approved' && request.decided_by
+          ? personName(request.decided_by)
+          : '';
+
+      const row = worksheet.addRow({
+        employeeName: excelText(employee?.full_name ?? 'Unknown'),
+        department: excelText(
+          departmentName(request.department_id)
+        ),
+        leaveType,
+        startDate: new Date(`${request.start_date}T00:00:00`),
+        endDate: new Date(`${request.end_date}T00:00:00`),
+        status:
+          request.status.charAt(0).toUpperCase() +
+          request.status.slice(1),
+        approvedBy: excelText(approvedBy),
+        totalDays: request.working_days,
+      });
+
+      row.height = 25;
+
+      for (let column = 1; column <= 8; column++) {
+        const cell = row.getCell(column);
+
+        cell.font = {
+          name: 'Calibri',
+          size: 9,
+          color: { argb: 'FF243653' },
+        };
+
+        cell.alignment = {
+          vertical: 'middle',
+          wrapText: true,
+        };
+
+        if (row.number % 2 === 0) {
+          cell.fill = {
             type: 'pattern',
             pattern: 'solid',
             fgColor: { argb: 'FFF0F5FF' },
@@ -784,36 +900,97 @@ export default function HRDashboard({
         }
       }
 
-      worksheet.autoFilter = { from: 'A1', to: 'H1' };
-      worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const bytes = new Uint8Array(buffer);
-      const copiedBuffer = new ArrayBuffer(bytes.byteLength);
-      new Uint8Array(copiedBuffer).set(bytes);
-      const blob = new Blob([copiedBuffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `LeaveDesk_Leave_Records_${todayKey}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      // Release the generated object URL after triggering the download.
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-      setMessage(`${exportRequests.length} leave records exported for the past ${reportMonths} month(s).`);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Unable to export Excel records.'
-      );
-    } finally {
-      setBusy(false);
+      row.getCell(4).numFmt = 'dd mmm yyyy';
+      row.getCell(5).numFmt = 'dd mmm yyyy';
+      row.getCell(8).numFmt = '0';
     }
+
+    // -------------------------------------------------
+    // FILTERS AND FREEZE HEADER
+    // -------------------------------------------------
+
+    worksheet.autoFilter = {
+      from: 'A3',
+      to: 'H3',
+    };
+
+    worksheet.views = [
+      {
+        state: 'frozen',
+        ySplit: 3,
+      },
+    ];
+
+    // -------------------------------------------------
+    // PRINT SETTINGS — A4 LANDSCAPE
+    // -------------------------------------------------
+
+    worksheet.pageSetup.paperSize = 9; // A4
+    worksheet.pageSetup.orientation = 'landscape';
+    worksheet.pageSetup.fitToPage = true;
+    worksheet.pageSetup.fitToWidth = 1;
+    worksheet.pageSetup.fitToHeight = exportRequests.length <= 22 ? 1 : 0;
+
+    worksheet.pageSetup.margins = {
+      left: 0.25,
+      right: 0.25,
+      top: 0.45,
+      bottom: 0.45,
+      header: 0.2,
+      footer: 0.2,
+    };
+
+    // Print only the actual report columns.
+    worksheet.pageSetup.printArea =
+      `A1:H${Math.max(3, worksheet.rowCount)}`;
+
+    // Repeat report headings on printed pages.
+    worksheet.pageSetup.printTitlesRow = '1:3';
+
+    worksheet.headerFooter.oddFooter =
+      '&CLeaveDesk Leave Report  |  Page &P of &N';
+
+    // -------------------------------------------------
+    // DOWNLOAD EXCEL FILE
+    // -------------------------------------------------
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const bytes = new Uint8Array(buffer);
+
+    const copiedBuffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(copiedBuffer).set(bytes);
+
+    const blob = new Blob([copiedBuffer], {
+      type:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download =
+      `LeaveDesk_Report_${fromDate || 'all'}_to_${toDate || 'all'}.xlsx`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    setMessage(
+      `${exportRequests.length} filtered leave records exported (${periodLabel}).`
+    );
+  } catch (err) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : 'Unable to export Excel records.'
+    );
+  } finally {
+    setBusy(false);
   }
+}
 
   function renderCompanyRequestsTable(records: Request[]) {
     if (records.length === 0) {
@@ -1259,23 +1436,6 @@ export default function HRDashboard({
                         />
                       </div>
                     )}
-                    <label className="hr-export-range">
-                      Report period
-                      <select value={reportMonths} onChange={(e) => setReportMonths(Number(e.target.value) as 1 | 3 | 6 | 12)}>
-                        <option value={1}>Last 1 month</option>
-                        <option value={3}>Last 3 months</option>
-                        <option value={6}>Last 6 months</option>
-                        <option value={12}>Last 1 year</option>
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      className="hr-button primary"
-                      disabled={busy}
-                      onClick={() => void exportExcel()}
-                    >
-                      {busy ? 'Preparing Excel...' : 'Export Leave Records (Excel)'}
-                    </button>
                     <button
                       type="button"
                       className="hr-button outline"
@@ -1385,6 +1545,19 @@ export default function HRDashboard({
                   }}
                 />
               </label>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+              <button
+                type="button"
+                className="hr-button primary"
+                disabled={busy || filteredCompanyRequests.length === 0}
+                onClick={() => void exportExcel()}
+              >
+                {busy ? 'Preparing Excel...' : 'Export Filtered Leave Report (Excel)'}
+              </button>
+              <span style={{ fontSize: 12 }}>
+                Exports all {filteredCompanyRequests.length} matching requests, including other pages.
+              </span>
             </div>
             <p>
               Showing {displayedCompanyRequests.length} of{' '}
@@ -1644,13 +1817,6 @@ export default function HRDashboard({
               title="Reports & Export"
               subtitle="Download all leave records accessible to HR."
             >
-              <label className="hr-export-range">
-                Report period
-                <select value={reportMonths} onChange={(e) => setReportMonths(Number(e.target.value) as 1 | 3 | 6 | 12)}>
-                  <option value={1}>Last 1 month</option><option value={3}>Last 3 months</option>
-                  <option value={6}>Last 6 months</option><option value={12}>Last 1 year</option>
-                </select>
-              </label>
               <button
                 type="button"
                 className="hr-button primary"

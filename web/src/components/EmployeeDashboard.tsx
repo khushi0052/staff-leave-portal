@@ -108,7 +108,7 @@ const managerNavigation: NavigationItem[] = [
 ];
 const hrNavigation: NavigationItem[] = [
   { id: 'hr', label: 'HR Head Dashboard', icon: '⌂' },
-  { id: 'hr-requests', label: 'Leave Requests', icon: '▤' },
+  { id: 'hr-requests', label: 'Leave Requests & Reports', icon: '▤' },
   { id: 'hr-employees', label: 'Employees', icon: '♙' },
 ];
 
@@ -119,7 +119,7 @@ const pageTitles: Record<Page, string> = {
   calendar: 'Team Leave Calendar',
   approvals: 'Department Dashboard',
   hr: 'HR Head Dashboard',
-  'hr-requests': 'Leave Requests',
+  'hr-requests': 'Leave Requests & Reports',
   'hr-employees': 'Employee Directory',
   'hr-reports': 'Reports',
 };
