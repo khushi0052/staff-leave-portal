@@ -722,9 +722,44 @@ export default function EmployeeDashboard({
               <section className="sm-panel sm-visual-balance">
                 <h2>◈ Leave Balance Overview</h2>
                 <div className="sm-balance-visual">
-                  <div className="sm-donut" style={{ '--used-percent': `${balance.entitlement && balance.entitlement > 0 ? Math.max(0, Math.min(100, balance.approved / balance.entitlement * 100)) : 0}%` } as React.CSSProperties}>
-                    <div><strong>{displayValue(balance.entitlement)}</strong><span>Days Entitlement</span></div>
-                  </div>
+                  
+<div
+  className="sm-donut"
+  style={{
+    background:
+      balance.entitlement !== null && balance.entitlement > 0
+        ? (() => {
+            const total = balance.entitlement;
+
+            const approved = Math.min(
+              total,
+              Math.max(0, balance.approved)
+            );
+
+            const pending = Math.min(
+              total - approved,
+              Math.max(0, balance.pending)
+            );
+
+            const approvedPercent = (approved / total) * 100;
+            const pendingEndPercent =
+              ((approved + pending) / total) * 100;
+
+            return `conic-gradient(
+              #3b82f6 0% ${approvedPercent}%,
+              #f59e0b ${approvedPercent}% ${pendingEndPercent}%,
+              #22c55e ${pendingEndPercent}% 100%
+            )`;
+          })()
+        : 'conic-gradient(#e2e8f0 0% 100%)',
+  }}
+>
+  <div>
+    <strong>{displayValue(balance.entitlement)}</strong>
+    <span>Days Entitlement</span>
+  </div>
+</div>
+
                   <div className="sm-donut-legend">
                     <div><span><i className="sm-key available"/> Available</span><strong>{displayValue(balance.available)} Days</strong></div>
                     <div><span><i className="sm-key approved"/> Approved</span><strong>{balance.approved} Days</strong></div>
@@ -751,8 +786,7 @@ export default function EmployeeDashboard({
               <section className="sm-panel sm-actions-panel">
                 <h2>Quick Actions</h2>
                 <button type="button" className="sm-primary-action" onClick={() => setStaffDialog('apply')}>▦ Apply for Leave <span>›</span></button>
-                <button type="button" onClick={() => setStaffDialog('requests')}>▤ My Requests <span>›</span></button>
-                <button type="button" onClick={() => setStaffDialog('requests')}>◈ My Leave Balance & History <span>›</span></button>
+                                <button type="button" onClick={() => setStaffDialog('requests')}>◈ My Leave History <span>›</span></button>
                 <p>Annual · Sick · Unpaid</p>
               </section>
               <section className="sm-panel sm-upcoming-panel">
