@@ -268,3 +268,57 @@
 .hr-export-range { display:flex; flex-direction:column; gap:5px; width:100%; font-size:12px; font-weight:700; }
 .hr-export-range select { min-height:36px; width:100%; border:1px solid #cbd9ed; border-radius:8px; padding:5px 8px; background:#fff; color:#102d59; }
 @media (max-width:600px) { .hr-employee-option { flex-wrap:wrap; } }
+
+/* HR: Department Head approvals table — compact, readable columns. */
+.hr-overview-desktop .hr-grid > div:nth-child(2) .hr-head-approval-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.hr-overview-desktop .hr-head-approval-table th,
+.hr-overview-desktop .hr-head-approval-table td {
+  overflow-wrap: break-word;
+  word-break: normal;
+  vertical-align: middle;
+}
+.hr-overview-desktop .hr-head-approval-table th:nth-child(1) { width: 13%; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(2) { width: 13%; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(3) { width: 13%; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(4) { width: 16%; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(5) { width: 6%; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(6) { width: 20%; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(7) { width: 19%; }
+.hr-overview-desktop .hr-head-approval-table .hr-head-leave-type {
+  white-space: normal;
+}
+.hr-overview-desktop .hr-head-approval-table .hr-head-leave-dates span {
+  display: block;
+  white-space: normal;
+}
+.hr-overview-desktop .hr-head-approval-table .hr-head-leave-dates span + span {
+  margin-top: 3px;
+}
+.hr-overview-desktop .hr-head-approval-table .hr-actions {
+  flex-wrap: wrap;
+}
+.hr-overview-desktop .hr-head-approval-table .hr-actions .hr-button {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 10px;
+  padding: 5px 6px !important;
+}
+
+/* HR Company Leave Status: keep badge colours in sync with donut segments. */
+.hr-overview-desktop .hr-status.cancelled {
+  background: #f3e8ff !important;
+  color: #7e22ce !important;
+}
+.hr-overview-desktop .hr-status.withdrawn {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+/* Display request date start/end separately without forcing extra table width. */
+.hr-overview-desktop .hr-head-approval-table .hr-head-leave-dates span {
+  display: block;
+  overflow-wrap: anywhere;
+}

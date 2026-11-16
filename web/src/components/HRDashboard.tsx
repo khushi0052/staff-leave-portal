@@ -351,16 +351,6 @@ export default function HRDashboard({
     return person.annual_entitlement - used;
   }
 
-  function availableBalanceForYear(person: Profile, balanceYear: number): number | null {
-    const remaining = remainingBalanceForYear(person, balanceYear);
-    if (remaining === null) return null;
-    const pending = requests
-      .filter((r) => r.user_id === person.id && r.leave_type === 'annual' &&
-        r.status === 'pending' && r.start_date.startsWith(`${balanceYear}-`))
-      .reduce((sum, r) => sum + r.working_days, 0);
-    return remaining - pending;
-  }
-
   function remainingBalance(person: Profile): number | null {
     return remainingBalanceForYear(person, year);
   }
@@ -1060,41 +1050,34 @@ export default function HRDashboard({
                     <p style={{ margin: '4px 0' }}>No pending Department Head requests.</p>
                   ) : (
                     <div className="hr-table-scroll">
-                      <table className="hr-table">
+                      <table className="hr-table hr-head-approval-table">
                         <thead>
                           <tr>
                             <th>Applicant</th>
                             <th>Department</th>
-                            <th>Leave</th>
+                            <th>Leave Type</th>
                             <th>Dates</th>
                             <th>Days</th>
-                            <th>Available balance</th>
-                            <th>Others on approved leave</th>
+                            <th>Approved Leave Queue</th>
                             <th>Decision</th>
                           </tr>
                         </thead>
                         <tbody>
                           {pendingManagers.map((r) => {
                             const conflicts = overlappingApprovedStaff(r);
-                            const manager = peopleById.get(r.user_id);
-                            const balanceValue = manager
-                              ? availableBalanceForYear(manager, Number(r.start_date.slice(0, 4)))
-                              : null;
                             return (
                               <tr key={r.id}>
                                 <td data-label="Applicant">{personName(r.user_id)}</td>
                                 <td data-label="Department">{departmentName(r.department_id)}</td>
-                                <td data-label="Leave">{leaveTypeLabel(r.leave_type)}</td>
-                                <td data-label="Dates">
-                                  {formatDate(r.start_date)} – {formatDate(r.end_date)}
+                                <td data-label="Leave Type" className="hr-head-leave-type">
+                                  {leaveTypeLabel(r.leave_type)}
+                                </td>
+                                <td data-label="Dates" className="hr-head-leave-dates">
+                                  <span>{formatDate(r.start_date)}</span>
+                                  <span>to {formatDate(r.end_date)}</span>
                                 </td>
                                 <td data-label="Days">{r.working_days}</td>
-                                <td data-label="Available balance">
-                                  {r.leave_type === 'annual'
-                                    ? (balanceValue === null ? 'Not assigned' : `${balanceValue} days`)
-                                    : 'Not applicable'}
-                                </td>
-                                <td data-label="Others on approved leave">
+                                <td data-label="Approved Leave Queue">
                                   {conflicts.length === 0
                                     ? 'None'
                                     : `${conflicts.length}: ${conflicts.slice(0, 3).join(', ')}${conflicts.length > 3 ? '…' : ''}`}
@@ -1150,7 +1133,7 @@ export default function HRDashboard({
                     <div
                       className="hr-status-donut"
                       style={{
-                        background: `conic-gradient(#38bd60 0% ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}%, #fbbf24 ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}%, #f87171 ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}%, #9a60de ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}%, #94a3b8 ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}% 100%)`
+                        background: `conic-gradient(#38bd60 0% ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}%, #fbbf24 ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}%, #f87171 ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}%, #a855f7 ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}%, #3b82f6 ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}% 100%)`
                       }}
                       aria-label={`${statusTotal} total requests in ${year}`}
                     >
