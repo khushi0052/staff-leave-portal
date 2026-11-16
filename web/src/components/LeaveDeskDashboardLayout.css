@@ -28,8 +28,8 @@
 .hr-overview-desktop .hr-grid { display:grid!important; grid-template-columns:repeat(12,minmax(0,1fr))!important; grid-template-rows:minmax(200px,auto) minmax(235px,auto); gap:10px!important; align-items:stretch!important; }
 .hr-overview-desktop .hr-grid > div { min-width:0!important; margin:0!important; width:auto!important; max-width:none!important; }
 .hr-overview-desktop .hr-grid > div:nth-child(1) { grid-column:1 / span 4; grid-row:1; }
-.hr-overview-desktop .hr-grid > div:nth-child(2) { grid-column:5 / span 5; grid-row:1; }
-.hr-overview-desktop .hr-grid > div:nth-child(5) { grid-column:10 / span 3; grid-row:1; }
+.hr-overview-desktop .hr-grid > div:nth-child(2) { grid-column:5 / span 6; grid-row:1; }
+.hr-overview-desktop .hr-grid > div:nth-child(5) { grid-column:11 / span 2; grid-row:1; }
 .hr-overview-desktop .hr-grid > div:nth-child(4) { grid-column:1 / span 4; grid-row:2; }
 .hr-overview-desktop .hr-grid > div:nth-child(3) { grid-column:5 / span 8; grid-row:2; }
 .hr-overview-desktop .hr-card { height:100%; box-sizing:border-box; border:1px solid #d5e3f5; border-radius:11px; padding:11px!important; background:#fff; box-shadow:0 3px 12px #10234f0b; }
@@ -166,3 +166,93 @@
 .hr-overview-desktop .hr-status-visual .hr-table thead{display:none}
 .hr-overview-desktop .hr-status-visual .hr-table td{padding:6px 4px!important}
 @media(max-width:740px){.hr-overview-desktop .hr-status-visual{grid-template-columns:110px minmax(0,1fr)}}
+
+/* HR overview refinement — only the main HR dashboard grid. */
+.hr-overview-desktop .hr-grid > div:nth-child(1) .hr-view-department {
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
+  width: auto !important;
+  min-width: 58px;
+  padding: 6px 10px !important;
+  line-height: 1.2;
+}
+.hr-overview-desktop .hr-grid > div:nth-child(1) .hr-table th:last-child,
+.hr-overview-desktop .hr-grid > div:nth-child(1) .hr-table td:last-child {
+  min-width: 66px;
+  white-space: nowrap;
+}
+/* Keep the approval decision controls and headings readable. */
+.hr-overview-desktop .hr-grid > div:nth-child(2) .hr-table {
+  min-width: 800px;
+}
+.hr-overview-desktop .hr-grid > div:nth-child(2) .hr-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+}
+.hr-overview-desktop .hr-grid > div:nth-child(2) .hr-actions .hr-button {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  min-width: 76px;
+  padding: 6px 7px !important;
+}
+/* In an expanded Add Employee state all three top-row panels grow together. */
+.hr-overview-desktop.hr-add-open .hr-grid {
+  grid-template-rows: minmax(510px, auto) minmax(235px, auto);
+}
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(1) .hr-card,
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(2) .hr-card,
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(5) .hr-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 510px;
+}
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(1) .hr-table-scroll,
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(2) .hr-table-scroll {
+  max-height: 460px;
+  min-height: 0;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(5) .hr-quick-actions {
+  min-height: 0;
+}
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(5) #hr-add-employee-form {
+  max-height: min(65vh, 505px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+}
+/* Opening the form must not clip the enlarged row behind the viewport edge. */
+@media (min-width:1280px) and (min-height:730px) {
+  .leavedesk:has(.hr-overview-desktop.hr-add-open) {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow-y: auto !important;
+  }
+  .leavedesk:has(.hr-overview-desktop.hr-add-open) .ld-main {
+    height: auto !important;
+    min-height: calc(100dvh - 56px) !important;
+    overflow: visible !important;
+  }
+}
+/* On compact desktops, Quick Actions needs enough width for the input form. */
+@media (min-width:1280px) and (max-width:1450px) {
+  .hr-overview-desktop .hr-grid {
+    grid-template-columns: minmax(0,1.05fr) minmax(0,1.45fr) minmax(230px,.85fr) !important;
+  }
+  .hr-overview-desktop .hr-grid > div:nth-child(1) { grid-column:1;grid-row:1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(2) { grid-column:2;grid-row:1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(5) { grid-column:3;grid-row:1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(4) { grid-column:1;grid-row:2; }
+  .hr-overview-desktop .hr-grid > div:nth-child(3) { grid-column:2 / 4;grid-row:2; }
+}
+@media (max-width:1279px), (max-height:729px) {
+  .hr-overview-desktop.hr-add-open .hr-grid { grid-template-rows:auto; }
+  .hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(1) .hr-card,
+  .hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(2) .hr-card,
+  .hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(5) .hr-card { min-height:0; }
+}

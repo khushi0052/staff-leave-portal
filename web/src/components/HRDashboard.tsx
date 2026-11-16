@@ -885,7 +885,7 @@ export default function HRDashboard({
   }
 
   return (
-    <div className={`hr-leavedesk${view === 'hr' ? ' hr-overview-desktop' : ''}`}>
+    <div className={`hr-leavedesk${view === 'hr' ? ' hr-overview-desktop' : ''}${view === 'hr' && showAddEmployee ? ' hr-add-open' : ''}`}>
       <div className="hr-page">
         {error && (
           <p className="error" role="alert">{error}</p>
@@ -998,7 +998,9 @@ export default function HRDashboard({
                               <td data-label="Action">
                                 <button
                                   type="button"
-                                  className="hr-button outline"
+                                  className="hr-button outline hr-view-department"
+                                  aria-label={`View ${dept.name} department`}
+                                  title={`View ${dept.name} department`}
                                   onClick={() => {
                                     setDepartmentFilter(dept.id);
                                     setEmployeeSearch('');
@@ -1007,7 +1009,7 @@ export default function HRDashboard({
                                     onNavigate('hr-employees');
                                   }}
                                 >
-                                  View Department ›
+                                  View
                                 </button>
                               </td>
                             </tr>
