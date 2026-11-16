@@ -750,7 +750,7 @@ async function exportExcel() {
     worksheet.mergeCells('A1:H1');
 
     const titleCell = worksheet.getCell('A1');
-    titleCell.value = `Leave Report: ${periodLabel}`;
+    titleCell.value = 'LeaveDesk — Leave Requests & Reports';
     titleCell.font = {
       name: 'Calibri',
       size: 16,
@@ -1436,6 +1436,13 @@ async function exportExcel() {
                         />
                       </div>
                     )}
+                    <button
+                      type="button"
+                      className="hr-button primary"
+                      onClick={() => onNavigate('hr-requests')}
+                    >
+                      Print Report
+                    </button>
                     <button
                       type="button"
                       className="hr-button outline"
