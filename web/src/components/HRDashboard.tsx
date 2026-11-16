@@ -439,6 +439,17 @@ export default function HRDashboard({
       peopleById.get(r.user_id)?.role === 'manager'
   );
 
+  // The dashboard is a short preview, not the full HR approval queue.
+  // Use the actual current month, independently of the dashboard year selector.
+  const currentMonth = todayKey.slice(0, 7);
+  const dashboardPendingManagers = pendingManagers
+    .filter((request) => request.start_date.startsWith(currentMonth))
+    .sort((a, b) =>
+      b.start_date.localeCompare(a.start_date) ||
+      b.created_at.localeCompare(a.created_at)
+    )
+    .slice(0, 2);
+
   // Company-wide view: Staff and Managers across every department.
   // Supabase RLS determines which records HR is permitted to read.
   const companyRequests = useMemo(
@@ -1044,10 +1055,10 @@ export default function HRDashboard({
               <div className="hr-span-6">
                 <Panel
                   title="Department Head Leave Requests"
-                  subtitle="Pending Manager applications awaiting HR approval."
+                  subtitle="Up to 2 pending Manager applications starting this month."
                 >
-                  {pendingManagers.length === 0 ? (
-                    <p style={{ margin: '4px 0' }}>No pending Department Head requests.</p>
+                  {dashboardPendingManagers.length === 0 ? (
+                    <p style={{ margin: '4px 0' }}>No pending Department Head requests for this month.</p>
                   ) : (
                     <div className="hr-table-scroll">
                       <table className="hr-table hr-head-approval-table">
@@ -1063,7 +1074,7 @@ export default function HRDashboard({
                           </tr>
                         </thead>
                         <tbody>
-                          {pendingManagers.map((r) => {
+                          {dashboardPendingManagers.map((r) => {
                             const conflicts = overlappingApprovedStaff(r);
                             return (
                               <tr key={r.id}>
