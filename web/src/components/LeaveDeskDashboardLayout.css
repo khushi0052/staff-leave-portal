@@ -441,3 +441,102 @@
   font-size: 11px;
   line-height: 1.3;
 }
+/* Restore Department Head approval table layout */
+
+.hr-head-approval-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.hr-head-approval-table th,
+.hr-head-approval-table td {
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  white-space: normal;
+  vertical-align: middle;
+  padding: 6px 4px;
+  font-size: 11px;
+}
+
+.hr-head-approval-table th:nth-child(1) { width: 12%; }
+.hr-head-approval-table th:nth-child(2) { width: 12%; }
+.hr-head-approval-table th:nth-child(3) { width: 13%; }
+.hr-head-approval-table th:nth-child(4) { width: 17%; }
+.hr-head-approval-table th:nth-child(5) { width: 6%; }
+.hr-head-approval-table th:nth-child(6) { width: 19%; }
+.hr-head-approval-table th:nth-child(7) { width: 21%; }
+
+.hr-head-approval-table .hr-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  width: 100%;
+}
+
+.hr-head-approval-table .hr-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 3px;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* FIX 1: Department Head requests - no horizontal scrolling */
+
+.hr-overview-desktop .hr-grid > div:nth-child(2) .hr-table-scroll {
+  overflow-x: hidden !important;
+  overflow-y: auto;
+}
+
+.hr-overview-desktop .hr-grid > div:nth-child(2) .hr-head-approval-table {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+}
+
+.hr-overview-desktop .hr-head-approval-table th,
+.hr-overview-desktop .hr-head-approval-table td {
+  box-sizing: border-box;
+  padding: 5px 3px !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.hr-overview-desktop .hr-head-approval-table th:nth-child(1) { width: 10% !important; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(2) { width: 11% !important; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(3) { width: 13% !important; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(4) { width: 16% !important; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(5) { width: 5% !important; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(6) { width: 22% !important; }
+.hr-overview-desktop .hr-head-approval-table th:nth-child(7) { width: 23% !important; }
+
+.hr-overview-desktop .hr-head-approval-table .hr-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+  width: 100%;
+  min-width: 0;
+}
+
+.hr-overview-desktop .hr-head-approval-table .hr-actions .hr-button {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 7px 2px !important;
+  font-size: 10px !important;
+  line-height: 1.2;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+}
+
+/* FIX 2: Restore purple Cancelled status badge */
+
+.hr-overview-desktop .hr-status.cancelled {
+  background-color: #f3e8ff !important;
+  color: #7e22ce !important;
+}
