@@ -1390,7 +1390,11 @@ async function exportExcel() {
                             </span>
                           </td>
                           <td data-label="Requests">{statusCounts[index]}</td>
-                          <td data-label="% of Total">{statusPercentages[index]}%</td>
+                          <td data-label="% of Total">
+  {statusTotal
+    ? ((statusCounts[index] / statusTotal) * 100).toFixed(1)
+    : '0.0'}%
+</td>
                         </tr>
                       ))}
                       <tr>
