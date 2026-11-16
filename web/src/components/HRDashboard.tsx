@@ -1467,7 +1467,13 @@ export default function HRDashboard({
                 type="button"
                 className="hr-button outline"
                 aria-expanded={employeePickerOpen}
-                onClick={() => setEmployeePickerOpen((open) => !open)}
+                onClick={() => {
+  if (!employeePickerOpen) {
+    setEmployeeSearch('');
+  }
+
+  setEmployeePickerOpen((open) => !open);
+}}
               >
                 {employeePickerOpen ? 'Hide employee names' : 'Choose employee'}
               </button>
