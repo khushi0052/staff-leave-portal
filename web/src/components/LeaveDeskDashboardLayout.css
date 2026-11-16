@@ -322,3 +322,93 @@
   display: block;
   overflow-wrap: anywhere;
 }
+
+
+/* ================================================================
+   HR dashboard: balanced columns and visible approval actions
+   Applied after older layout rules so it takes precedence.
+   Presentation only: does not change requests, approval permissions,
+   employee creation, or data calculations.
+   ================================================================ */
+@media (min-width: 1500px) {
+  .hr-overview-desktop .hr-grid {
+    /* The approval panel receives more room, without crushing Quick Actions. */
+    grid-template-columns: minmax(0, 1.38fr) minmax(0, 2.70fr) minmax(0, .92fr) !important;
+  }
+  .hr-overview-desktop .hr-grid > div:nth-child(1) { grid-column: 1; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(2) { grid-column: 2; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(5) { grid-column: 3; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(4) { grid-column: 1; grid-row: 2; }
+  .hr-overview-desktop .hr-grid > div:nth-child(3) { grid-column: 2 / 4; grid-row: 2; }
+}
+
+@media (min-width: 1280px) and (max-width: 1499px) {
+  .hr-overview-desktop .hr-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.85fr) minmax(255px, .83fr) !important;
+  }
+  .hr-overview-desktop .hr-grid > div:nth-child(1) { grid-column: 1; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(2) { grid-column: 2; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(5) { grid-column: 3; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(4) { grid-column: 1; grid-row: 2; }
+  .hr-overview-desktop .hr-grid > div:nth-child(3) { grid-column: 2 / 4; grid-row: 2; }
+}
+
+@media (min-width: 1280px) {
+  /* Both rows share the same column boundaries for a symmetric grid. */
+  .hr-overview-desktop .hr-grid > div:nth-child(2) .hr-table-scroll {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  /* Override the earlier 800px minimum that forced horizontal scrolling. */
+  .hr-overview-desktop .hr-grid > div:nth-child(2) table.hr-head-approval-table {
+    table-layout: fixed !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .hr-overview-desktop .hr-head-approval-table th,
+  .hr-overview-desktop .hr-head-approval-table td {
+    box-sizing: border-box;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+    padding: 5px 4px !important;
+    vertical-align: middle;
+  }
+  /* 100% total; reserve 20% specifically for BOTH decision buttons. */
+  .hr-overview-desktop .hr-head-approval-table th:nth-child(1) { width: 12% !important; }
+  .hr-overview-desktop .hr-head-approval-table th:nth-child(2) { width: 12% !important; }
+  .hr-overview-desktop .hr-head-approval-table th:nth-child(3) { width: 12% !important; }
+  .hr-overview-desktop .hr-head-approval-table th:nth-child(4) { width: 17% !important; }
+  .hr-overview-desktop .hr-head-approval-table th:nth-child(5) { width: 5% !important; }
+  .hr-overview-desktop .hr-head-approval-table th:nth-child(6) { width: 22% !important; }
+  .hr-overview-desktop .hr-head-approval-table th:nth-child(7) { width: 20% !important; }
+  .hr-overview-desktop .hr-head-approval-table .hr-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px !important;
+    min-width: 0;
+    width: 100%;
+    align-items: stretch;
+  }
+  .hr-overview-desktop .hr-head-approval-table .hr-actions .hr-button {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 6px 2px !important;
+    font-size: 9px !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+    text-align: center;
+  }
+}
+
+/* On narrower desktops, stack decisions inside their cell rather than
+   introducing horizontal scrolling. Both controls remain visible. */
+@media (min-width: 1280px) and (max-width: 1499px) {
+  .hr-overview-desktop .hr-head-approval-table .hr-actions {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
