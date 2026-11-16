@@ -556,3 +556,43 @@
   font-weight: 500;
   width: 100%;
 }
+/* HR Employee Directory: two columns, five rows per column */
+
+.hr-employee-options {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(5, auto) !important;
+  grid-auto-flow: column !important;
+  gap: 8px 12px !important;
+  align-content: start;
+}
+
+.hr-employee-option {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  width: 100% !important;
+  min-width: 0;
+  padding: 10px 12px !important;
+  border: 1px solid #d7e2f2;
+  border-radius: 8px;
+  background: #ffffff;
+  text-align: left;
+  white-space: normal;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hr-employee-option small {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+@media (max-width: 600px) {
+  .hr-employee-options {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: none !important;
+    grid-auto-flow: row !important;
+  }
+}
