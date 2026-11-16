@@ -257,158 +257,144 @@
   .hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(5) .hr-card { min-height:0; }
 }
 
-/* HR employee picker: avoid a full directory and history table on the Employees page. */
-.hr-employee-picker { position:relative; max-width:620px; }
-.hr-employee-options { margin-top:6px; max-height:224px; overflow-y:auto; border:1px solid #d6e3f4; border-radius:10px; background:#fff; box-shadow:0 8px 24px #173a701c; }
-.hr-employee-option { display:flex; width:100%; justify-content:space-between; gap:12px; align-items:center; text-align:left; background:#fff; border:0; border-bottom:1px solid #edf2f9; padding:10px 12px; color:#102d59; cursor:pointer; }
-.hr-employee-option:hover,.hr-employee-option:focus-visible { background:#eef5ff; }
-.hr-employee-option small { color:#697d9b; }
-.hr-employee-add { max-width:450px; }
-.hr-employee-add-form { margin-top:10px; max-width:450px; min-width:0; }
-.hr-export-range { display:flex; flex-direction:column; gap:5px; width:100%; font-size:12px; font-weight:700; }
-.hr-export-range select { min-height:36px; width:100%; border:1px solid #cbd9ed; border-radius:8px; padding:5px 8px; background:#fff; color:#102d59; }
-@media (max-width:600px) { .hr-employee-option { flex-wrap:wrap; } }
 
-/* HR: Department Head approvals table — compact, readable columns. */
-.hr-overview-desktop .hr-grid > div:nth-child(2) .hr-head-approval-table {
-  width: 100%;
-  min-width: 0;
-  table-layout: fixed;
-}
-.hr-overview-desktop .hr-head-approval-table th,
-.hr-overview-desktop .hr-head-approval-table td {
-  overflow-wrap: break-word;
-  word-break: normal;
-  vertical-align: middle;
-}
-.hr-overview-desktop .hr-head-approval-table th:nth-child(1) { width: 13%; }
-.hr-overview-desktop .hr-head-approval-table th:nth-child(2) { width: 13%; }
-.hr-overview-desktop .hr-head-approval-table th:nth-child(3) { width: 13%; }
-.hr-overview-desktop .hr-head-approval-table th:nth-child(4) { width: 16%; }
-.hr-overview-desktop .hr-head-approval-table th:nth-child(5) { width: 6%; }
-.hr-overview-desktop .hr-head-approval-table th:nth-child(6) { width: 20%; }
-.hr-overview-desktop .hr-head-approval-table th:nth-child(7) { width: 19%; }
-.hr-overview-desktop .hr-head-approval-table .hr-head-leave-type {
-  white-space: normal;
-}
-.hr-overview-desktop .hr-head-approval-table .hr-head-leave-dates span {
-  display: block;
-  white-space: normal;
-}
-.hr-overview-desktop .hr-head-approval-table .hr-head-leave-dates span + span {
-  margin-top: 3px;
-}
-.hr-overview-desktop .hr-head-approval-table .hr-actions {
-  flex-wrap: wrap;
-}
-.hr-overview-desktop .hr-head-approval-table .hr-actions .hr-button {
-  min-width: 0;
-  max-width: 100%;
-  font-size: 10px;
-  padding: 5px 6px !important;
-}
-
-/* HR Company Leave Status: keep badge colours in sync with donut segments. */
-.hr-overview-desktop .hr-status.cancelled {
-  background: #f3e8ff !important;
-  color: #7e22ce !important;
-}
-.hr-overview-desktop .hr-status.withdrawn {
-  background: #dbeafe !important;
-  color: #1d4ed8 !important;
-}
-/* Display request date start/end separately without forcing extra table width. */
-.hr-overview-desktop .hr-head-approval-table .hr-head-leave-dates span {
-  display: block;
-  overflow-wrap: anywhere;
-}
-
-
-/* ================================================================
-   HR dashboard: balanced columns and visible approval actions
-   Applied after older layout rules so it takes precedence.
-   Presentation only: does not change requests, approval permissions,
-   employee creation, or data calculations.
-   ================================================================ */
-@media (min-width: 1500px) {
-  .hr-overview-desktop .hr-grid {
-    /* The approval panel receives more room, without crushing Quick Actions. */
-    grid-template-columns: minmax(0, 1.38fr) minmax(0, 2.70fr) minmax(0, .92fr) !important;
-  }
-  .hr-overview-desktop .hr-grid > div:nth-child(1) { grid-column: 1; grid-row: 1; }
-  .hr-overview-desktop .hr-grid > div:nth-child(2) { grid-column: 2; grid-row: 1; }
-  .hr-overview-desktop .hr-grid > div:nth-child(5) { grid-column: 3; grid-row: 1; }
-  .hr-overview-desktop .hr-grid > div:nth-child(4) { grid-column: 1; grid-row: 2; }
-  .hr-overview-desktop .hr-grid > div:nth-child(3) { grid-column: 2 / 4; grid-row: 2; }
-}
-
-@media (min-width: 1280px) and (max-width: 1499px) {
-  .hr-overview-desktop .hr-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.85fr) minmax(255px, .83fr) !important;
-  }
-  .hr-overview-desktop .hr-grid > div:nth-child(1) { grid-column: 1; grid-row: 1; }
-  .hr-overview-desktop .hr-grid > div:nth-child(2) { grid-column: 2; grid-row: 1; }
-  .hr-overview-desktop .hr-grid > div:nth-child(5) { grid-column: 3; grid-row: 1; }
-  .hr-overview-desktop .hr-grid > div:nth-child(4) { grid-column: 1; grid-row: 2; }
-  .hr-overview-desktop .hr-grid > div:nth-child(3) { grid-column: 2 / 4; grid-row: 2; }
-}
-
+/* HR Add Employee: avoid clipping the form in a narrow Quick Actions column.
+   Keep the first two cards aligned with the expanded form. */
 @media (min-width: 1280px) {
-  /* Both rows share the same column boundaries for a symmetric grid. */
-  .hr-overview-desktop .hr-grid > div:nth-child(2) .hr-table-scroll {
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
+  .hr-overview-desktop .hr-grid {
+    grid-template-columns: minmax(265px, 1fr) minmax(0, 1.65fr) minmax(320px, .9fr) !important;
   }
-  /* Override the earlier 800px minimum that forced horizontal scrolling. */
-  .hr-overview-desktop .hr-grid > div:nth-child(2) table.hr-head-approval-table {
-    table-layout: fixed !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    width: 100% !important;
-  }
-  .hr-overview-desktop .hr-head-approval-table th,
-  .hr-overview-desktop .hr-head-approval-table td {
-    box-sizing: border-box;
-    overflow-wrap: anywhere !important;
-    word-break: normal !important;
-    padding: 5px 4px !important;
-    vertical-align: middle;
-  }
-  /* 100% total; reserve 20% specifically for BOTH decision buttons. */
-  .hr-overview-desktop .hr-head-approval-table th:nth-child(1) { width: 12% !important; }
-  .hr-overview-desktop .hr-head-approval-table th:nth-child(2) { width: 12% !important; }
-  .hr-overview-desktop .hr-head-approval-table th:nth-child(3) { width: 12% !important; }
-  .hr-overview-desktop .hr-head-approval-table th:nth-child(4) { width: 17% !important; }
-  .hr-overview-desktop .hr-head-approval-table th:nth-child(5) { width: 5% !important; }
-  .hr-overview-desktop .hr-head-approval-table th:nth-child(6) { width: 22% !important; }
-  .hr-overview-desktop .hr-head-approval-table th:nth-child(7) { width: 20% !important; }
-  .hr-overview-desktop .hr-head-approval-table .hr-actions {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px !important;
-    min-width: 0;
-    width: 100%;
-    align-items: stretch;
-  }
-  .hr-overview-desktop .hr-head-approval-table .hr-actions .hr-button {
-    min-width: 0 !important;
-    max-width: none !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 6px 2px !important;
-    font-size: 9px !important;
-    line-height: 1.15 !important;
-    white-space: nowrap !important;
-    overflow-wrap: normal !important;
-    word-break: keep-all !important;
-    text-align: center;
-  }
+  .hr-overview-desktop .hr-grid > div:nth-child(1) { grid-column: 1; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(2) { grid-column: 2; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(5) { grid-column: 3; grid-row: 1; }
+  .hr-overview-desktop .hr-grid > div:nth-child(4) { grid-column: 1; grid-row: 2; }
+  .hr-overview-desktop .hr-grid > div:nth-child(3) { grid-column: 2 / 4; grid-row: 2; }
+}
+.hr-overview-desktop .hr-grid > div:nth-child(5),
+.hr-overview-desktop .hr-grid > div:nth-child(5) .hr-card,
+.hr-overview-desktop .hr-grid > div:nth-child(5) .hr-quick-actions,
+.hr-overview-desktop #hr-add-employee-form {
+  min-width: 0;
+  box-sizing: border-box;
+}
+.hr-overview-desktop #hr-add-employee-form,
+.hr-overview-desktop #hr-add-employee-form * {
+  box-sizing: border-box;
+}
+.hr-overview-desktop #hr-add-employee-form {
+  width: 100%;
+  overflow-x: hidden;
+}
+.hr-overview-desktop #hr-add-employee-form input,
+.hr-overview-desktop #hr-add-employee-form select,
+.hr-overview-desktop #hr-add-employee-form textarea,
+.hr-overview-desktop #hr-add-employee-form button {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+/* The three cards share a row: let it grow, and scroll long content within panels. */
+.hr-overview-desktop.hr-add-open .hr-grid {
+  grid-template-rows: minmax(510px, auto) minmax(235px, auto);
+  align-items: stretch !important;
+}
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(1) .hr-table-scroll,
+.hr-overview-desktop.hr-add-open .hr-grid > div:nth-child(2) .hr-table-scroll {
+  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+/* Opening a long form should not trap the page in a no-scroll viewport. */
+.leavedesk:has(.hr-overview-desktop.hr-add-open) {
+  height: auto !important;
+  min-height: 100dvh !important;
+  overflow-y: auto !important;
+}
+.leavedesk:has(.hr-overview-desktop.hr-add-open) .ld-main {
+  height: auto !important;
+  overflow: visible !important;
+}
+@media (max-width: 1279px) {
+  .hr-overview-desktop.hr-add-open .hr-grid { grid-template-rows: auto; }
+  .hr-overview-desktop #hr-add-employee-form { max-height: none !important; overflow-y: visible !important; }
+}
+/* Company Leave Status — five status colours */
+
+.hr-status.approved {
+  background: #dcfce7;
+  color: #15803d;
 }
 
-/* On narrower desktops, stack decisions inside their cell rather than
-   introducing horizontal scrolling. Both controls remain visible. */
-@media (min-width: 1280px) and (max-width: 1499px) {
-  .hr-overview-desktop .hr-head-approval-table .hr-actions {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
+.hr-status.pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.hr-status.rejected {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.hr-status.cancelled {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.hr-status.withdrawn {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+/* Fix Company Leave Status donut chart */
+
+.hr-status-donut {
+  width: 160px;
+  height: 160px;
+  min-width: 160px;
+  min-height: 160px;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hr-status-donut > div {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.hr-status-donut strong {
+  font-size: 22px;
+  font-weight: 800;
+  color: #243653;
+  line-height: 1.2;
+}
+
+.hr-status-donut span {
+  font-size: 12px;
+  color: #64748b;
+}
+/* Department Overview: approved leave column */
+
+.hr-approved-month-heading {
+  max-width: 75px;
+  width: 75px;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.3;
+  text-align: center;
 }

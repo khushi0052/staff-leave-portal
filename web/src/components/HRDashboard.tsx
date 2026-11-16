@@ -984,7 +984,19 @@ export default function HRDashboard({
                           <th>Staff</th>
                           <th>Pending Requests</th>
                           <th>On Leave Today</th>
-                          <th>Avg. Leave Balance</th>
+                          <th
+                            className="hr-approved-month-heading"
+                            style={{
+                              width: 76,
+                              maxWidth: 76,
+                              whiteSpace: 'normal',
+                              overflowWrap: 'break-word',
+                              lineHeight: 1.25,
+                              textAlign: 'center',
+                            }}
+                          >
+                            Approved Leaves This Month
+                          </th>
                           <th>Action</th>
                         </tr>
                       </thead>
@@ -1001,6 +1013,23 @@ export default function HRDashboard({
                           const onLeave = people.filter(
                             (p) => onLeaveToday(p.id)
                           ).length;
+
+                          // Count approved requests overlapping the current
+                          // calendar month (including Manager leave).
+                          const monthStart = `${todayKey.slice(0, 7)}-01`;
+                          const nextMonthStart = new Date(
+                            Date.UTC(today.getFullYear(), today.getMonth() + 1, 1)
+                          ).toISOString().slice(0, 10);
+                          const approvedThisMonth = requests.filter((request) => {
+                            const role = peopleById.get(request.user_id)?.role;
+                            return (
+                              request.department_id === dept.id &&
+                              request.status === 'approved' &&
+                              (role === 'staff' || role === 'manager') &&
+                              request.start_date < nextMonthStart &&
+                              request.end_date >= monthStart
+                            );
+                          }).length;
 
                           return (
                             <tr key={dept.id}>
@@ -1022,8 +1051,8 @@ export default function HRDashboard({
                                   kind="on-leave"
                                 />
                               </td>
-                              <td data-label="Avg. Leave Balance">
-                                {averageBalance(people)}
+                              <td data-label="Approved Leaves This Month" style={{ textAlign: 'center' }}>
+                                {approvedThisMonth}
                               </td>
                               <td data-label="Action">
                                 <button
