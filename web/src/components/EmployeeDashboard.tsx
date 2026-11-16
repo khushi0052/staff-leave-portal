@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './LeaveDeskDashboardLayout.css';
 
 import { supabase } from '../lib/supabase';
 import LeaveRequestForm from './LeaveRequestForm';
@@ -34,6 +35,15 @@ type EmployeeProfile = {
   role: string;
   department_id: string | null;
   annual_entitlement: number | null;
+};
+
+type SnapshotRequest = {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  working_days: number;
+  status: string;
 };
 
 type AnnualLeaveRequest = {
@@ -200,6 +210,8 @@ export default function EmployeeDashboard({
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  const [snapshotRequests, setSnapshotRequests] = useState<SnapshotRequest[]>([]);
+  const [staffDialog, setStaffDialog] = useState<'apply' | 'requests' | null>(null);
 
 
   // Null means that the user has not selected a tab yet.
@@ -344,6 +356,22 @@ export default function EmployeeDashboard({
     return () => { active = false; };
   }, [userId, profile?.role, selectedStaffYear, refreshKey]);
 
+  useEffect(() => {
+    let active = true;
+    async function loadSnapshot() {
+      const { data, error: snapshotError } = await supabase.from('leave_requests')
+        .select('id, leave_type, start_date, end_date, working_days, status')
+        .eq('user_id', userId)
+        .gte('start_date', `${selectedStaffYear}-01-01`)
+        .lte('start_date', `${selectedStaffYear}-12-31`)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (active && !snapshotError) setSnapshotRequests((data ?? []) as SnapshotRequest[]);
+    }
+    void loadSnapshot();
+    return () => { active = false; };
+  }, [userId, selectedStaffYear, refreshKey]);
+
   function refreshDashboard() {
     setRefreshKey((value) => value + 1);
   }
@@ -427,6 +455,16 @@ export default function EmployeeDashboard({
       : role === 'manager' && (requestedPage === 'request' || requestedPage === 'requests')
         ? 'overview'
         : requestedPage;
+
+  const todayISO = (() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  })();
+  const upcoming = [...snapshotRequests]
+    .filter((r) => r.status === 'approved' && r.end_date >= todayISO)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
+  const leaveLabel = (type: string) => `${type.charAt(0).toUpperCase()}${type.slice(1)} Leave`;
+  const shortDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
   const displayValue = (value: number | null) =>
     value === null ? '—' : String(value);
@@ -681,38 +719,63 @@ export default function EmployeeDashboard({
               <StatCard label="Pending Requests" value={String(pendingRequestCount)} color="purple" icon="♙" />
             </div>
 
-            <div className="sm-columns">
-              <div className="sm-column">
-                <section className="sm-panel">
-                  <h2>▦ Annual Leave Balance — {selectedStaffYear}</h2>
-                  <p className="sm-subtitle">Your annual leave summary for the selected year.</p>
-                  <div className="sm-balance">
-                    <div className="sm-balance-item"><span>Entitlement</span><strong>{displayValue(balance.entitlement)} Days</strong></div>
-                    <div className="sm-balance-item approved"><span>Approved Annual Leave</span><strong>{balance.approved} Days</strong></div>
-                    <div className="sm-balance-item pending"><span>Pending Annual Leave</span><strong>{balance.pending} Days</strong></div>
-                    <div className="sm-balance-item"><span>Remaining Balance</span><strong>{displayValue(balance.remaining)} Days</strong></div>
-                    <div className="sm-balance-item"><span>Available to Request</span><strong>{displayValue(balance.available)} Days</strong></div>
+            <div className="sm-at-a-glance">
+              <section className="sm-panel sm-visual-balance">
+                <h2>◈ Leave Balance Overview</h2>
+                <div className="sm-balance-visual">
+                  <div className="sm-donut" style={{ '--used-percent': `${balance.entitlement && balance.entitlement > 0 ? Math.max(0, Math.min(100, balance.approved / balance.entitlement * 100)) : 0}%` } as React.CSSProperties}>
+                    <div><strong>{displayValue(balance.entitlement)}</strong><span>Days Entitlement</span></div>
                   </div>
-                </section>
-                <section className="sm-panel" aria-label="Request Leave">
-                  {requestForm}
-                </section>
-              </div>
-
-              <div className="sm-column">
-                <section className="sm-panel" aria-label="My Leave Requests">
-                  {myRequests}
-                </section>
-                <aside className="sm-policy" style={{ padding: 10 }}>
-                  <h3>▤ Leave Policy Reminders</h3>
-                  <ul>
-                    <li>Annual leave depends on your assigned entitlement for the selected year.</li>
-                    <li>Unpaid leave requires a reason and approval.</li>
-                    <li>Sick leave may be backdated within the existing policy limit.</li>
-                  </ul>
-                </aside>
-              </div>
+                  <div className="sm-donut-legend">
+                    <div><span><i className="sm-key available"/> Available</span><strong>{displayValue(balance.available)} Days</strong></div>
+                    <div><span><i className="sm-key approved"/> Approved</span><strong>{balance.approved} Days</strong></div>
+                    <div><span><i className="sm-key pending"/> Pending</span><strong>{balance.pending} Days</strong></div>
+                    <div className="sm-caption">Remaining balance: {displayValue(balance.remaining)} days</div>
+                  </div>
+                </div>
+              </section>
+              <section className="sm-panel sm-recent-panel">
+                <div className="sm-panel-head"><h2>▤ My Leave Requests (Recent)</h2><button type="button" onClick={() => setStaffDialog('requests')}>View All Requests ›</button></div>
+                <table className="sm-mini-table">
+                  <thead><tr><th>Leave Dates</th><th>Type</th><th>Duration</th><th>Status</th></tr></thead>
+                  <tbody>{snapshotRequests.slice(0, 4).map((r) => (
+                    <tr key={r.id}>
+                      <td>{shortDate(r.start_date)} – {shortDate(r.end_date)}</td>
+                      <td>{leaveLabel(r.leave_type)}</td>
+                      <td>{r.working_days} Days</td>
+                      <td><span className={`sm-mini-pill ${r.status}`}>{r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+                {snapshotRequests.length === 0 && <p className="sm-quiet">No leave requests for {selectedStaffYear}.</p>}
+              </section>
+              <section className="sm-panel sm-actions-panel">
+                <h2>Quick Actions</h2>
+                <button type="button" className="sm-primary-action" onClick={() => setStaffDialog('apply')}>▦ Apply for Leave <span>›</span></button>
+                <button type="button" onClick={() => setStaffDialog('requests')}>▤ My Requests <span>›</span></button>
+                <button type="button" onClick={() => setStaffDialog('requests')}>◈ My Leave Balance & History <span>›</span></button>
+                <p>Annual · Sick · Unpaid</p>
+              </section>
+              <section className="sm-panel sm-upcoming-panel">
+                <h2>▦ My Upcoming Leave</h2>
+                {upcoming ? <div className="sm-upcoming-highlight">
+                  <strong>{shortDate(upcoming.start_date)} – {shortDate(upcoming.end_date)} {upcoming.end_date.slice(0,4)}</strong>
+                  <span>{leaveLabel(upcoming.leave_type)} · {upcoming.working_days} working days</span>
+                </div> : <p className="sm-quiet">No upcoming approved leave.</p>}
+                <p className="sm-quiet">Leave Policy: Annual, Sick and Unpaid. Unpaid leave requires a reason.</p>
+              </section>
+              <section className="sm-panel sm-calendar-panel">
+                {role === 'staff' ? <StaffLeaveCalendar userId={userId} refreshKey={refreshKey} /> :
+                  <div><h2>Team Calendar</h2><button type="button" className="sm-primary-action" onClick={() => setActivePage('calendar')}>View Team Calendar ›</button></div>}
+              </section>
             </div>
+
+            {staffDialog && <div className="sm-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setStaffDialog(null); }}>
+              <section className="sm-modal" role="dialog" aria-modal="true" aria-label={staffDialog === 'apply' ? 'Apply for Leave' : 'My Leave Requests'}>
+                <header className="sm-modal-head"><h2>{staffDialog === 'apply' ? 'Apply for Leave' : 'My Leave Requests'}</h2><button type="button" onClick={() => setStaffDialog(null)} aria-label="Close dialog">✕</button></header>
+                {staffDialog === 'apply' ? requestForm : myRequests}
+              </section>
+            </div>}
           </div>
         )}
 

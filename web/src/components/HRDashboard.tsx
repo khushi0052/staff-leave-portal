@@ -1,4 +1,5 @@
 
+import './LeaveDeskDashboardLayout.css';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import ExcelJS from 'exceljs';
@@ -884,7 +885,7 @@ export default function HRDashboard({
   }
 
   return (
-    <div className="hr-leavedesk">
+    <div className={`hr-leavedesk${view === 'hr' ? ' hr-overview-desktop' : ''}`}>
       <div className="hr-page">
         {error && (
           <p className="error" role="alert">{error}</p>
@@ -1090,12 +1091,12 @@ export default function HRDashboard({
 
               <div className="hr-span-6">
                 <Panel
-                  title="Company-Wide Leave Requests"
+                  title="Company-Wide Leave Requests (Recent 5)"
                   subtitle="Latest Staff and Manager requests from all departments."
                 >
-                  {renderCompanyRequestsTable(companyRequests.slice(0, 8))}
+                  {renderCompanyRequestsTable(companyRequests.slice(0, 5))}
                   <p style={{ marginTop: 12 }}>
-                    Showing {Math.min(8, companyRequests.length)} of{' '}
+                    Showing {Math.min(5, companyRequests.length)} of{' '}
                     {companyRequests.length} company requests.
                   </p>
                   <button
@@ -1113,7 +1114,17 @@ export default function HRDashboard({
                   title="Company Leave Status"
                   subtitle={`Staff and Manager requests for ${year}.`}
                 >
-                  <table className="hr-table">
+                  <div className="hr-status-visual">
+                    <div
+                      className="hr-status-donut"
+                      style={{
+                        background: `conic-gradient(#38bd60 0% ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}%, #fbbf24 ${statusTotal ? statusCounts[0] / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}%, #f87171 ${statusTotal ? (statusCounts[0] + statusCounts[1]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}%, #9a60de ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2]) / statusTotal * 100 : 0}% ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}%, #94a3b8 ${statusTotal ? (statusCounts[0] + statusCounts[1] + statusCounts[2] + statusCounts[3]) / statusTotal * 100 : 0}% 100%)`
+                      }}
+                      aria-label={`${statusTotal} total requests in ${year}`}
+                    >
+                      <div><strong>{statusTotal.toLocaleString('en-IN')}</strong><span>Requests</span></div>
+                    </div>
+                    <table className="hr-table">
                     <thead>
                       <tr>
                         <th>Status</th>
@@ -1141,7 +1152,8 @@ export default function HRDashboard({
                       </tr>
                     </tbody>
 
-                  </table>
+                    </table>
+                  </div>
                 </Panel>
               </div>
 
