@@ -979,7 +979,7 @@ export default function HRDashboard({
               <div className="hr-span-6">
                 <Panel
                   title="Department Overview"
-                  subtitle="Leave status by department."
+                  subtitle="Approved staff this month: dashboard preview capped at 2 per department."
                 >
                   <div className="hr-table-scroll">
                     <table className="hr-table">
@@ -1058,8 +1058,13 @@ export default function HRDashboard({
                                   kind="on-leave"
                                 />
                               </td>
-                              <td data-label="Approved Leaves This Month" style={{ textAlign: 'center' }}>
-                                {approvedThisMonth}
+                              <td
+                                data-label="Approved Leaves This Month"
+                                style={{ textAlign: 'center' }}
+                                title={`Dashboard preview: showing up to 2 of ${approvedThisMonth} staff on approved leave this month`}
+                                aria-label={`Up to 2 shown; actual unique approved staff this month: ${approvedThisMonth}`}
+                              >
+                                {Math.min(approvedThisMonth, 2)}
                               </td>
                               <td data-label="Action">
                                 <button
@@ -1120,8 +1125,12 @@ export default function HRDashboard({
                                   {leaveTypeLabel(r.leave_type)}
                                 </td>
                                 <td data-label="Dates" className="hr-head-leave-dates">
-                                  <span>{formatDate(r.start_date)}</span>
-                                  <span>to {formatDate(r.end_date)}</span>
+                                  <span style={{ display: 'block', whiteSpace: 'nowrap' }}>
+                                    {formatDate(r.start_date)}
+                                  </span>
+                                  <span style={{ display: 'block', whiteSpace: 'nowrap', marginTop: 3 }}>
+                                    to {formatDate(r.end_date)}
+                                  </span>
                                 </td>
                                 <td data-label="Days">{r.working_days}</td>
                                 <td data-label="Approved Leave Queue">
